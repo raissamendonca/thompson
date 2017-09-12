@@ -1,0 +1,184 @@
+---
+title: "Burntwood River 2014"
+author: "Dave Costello"
+date: "December 15, 2015"
+output: html_document
+---
+
+##In situ toxicity
+
+```{r data}
+options(device=quartz)
+cages <- read.csv("/Users/raissamendonca/Documents/Kent State University/Costello Lab/Thompson/R Directory/thomp_cages.csv")
+#cages <- read.csv("~/Dropbox/COURSE MATERIALS/Thompson/thomp_cages.csv")
+summary(cages)
+Exp <- subset(cages,cages$Exp_Ref=="E")
+Weir <- subset(cages,cages$Location=="Weir")
+Birch <- subset(cages,cages$Location!="Weir")
+with(cages,tapply(Hyalella_alive,Exp_Ref,sd,na.rm=T))
+
+cor.test(c(540,325,260,104),c(160,61,34,18)) #Water-Sed correlation at Weir
+cor.test(c(220,380,150,65),c(8,3,3,3)) #Water-Sed correlation at Birch
+
+```
+
+```{r}
+logaxis=function(low,high,side){
+  options(scipen=4)
+  pow <- seq(low,high,by=1)
+  ticksat <-as.vector(sapply(pow, function(p) (1:10)*10^p))
+  axis(side,10^pow,las=1)
+  axis(side, ticksat, labels=NA, tcl=-0.25, lwd=0, lwd.ticks=1)
+}
+
+```
+
+##Mixed effects model
+These models are designed to test whether there was a significant "site" random effect for H. azteca and L. stagnalis. Both tests revealed that there was no improvement of the models by including the mixed effect. Therefore, for future models, there is no need to include "site".
+
+```{r mixed effects}
+#Had to use a different survival variable, since mixed effects models do not allow for missing observations. NAs were replaced with mean of treatment group.
+library(nlme)
+
+meH <- lme(Ha_lme~Exp_Ref*Wat_Sed*Location,random=~1|Site,data=cages)
+summary(meH)
+anova(meH)
+meH2 <- lm(Ha_lme~Exp_Ref*Wat_Sed*Location,data=cages)
+anova(meH,meH2) #The "site" random effect does not seem to improve the model. Ignore for future models.
+
+meL <- lme(Ls_lme~Exp_Ref*Wat_Sed*Location,random=~1|Site,data=cages)
+anova(meL)
+meL2 <- lm(Ls_lme~Exp_Ref*Wat_Sed*Location,data=cages)
+anova(meL,meL2) #No improvement in the model by including the random effect. Ignore for future models.
+```
+
+##H. azteca models
+Compare models that use either Exp/Ref, surface sediment Ni, or overlying water Ni to predict H. azteca survival. Model comparison showed that sediment Ni is the best way to predict H. azteca survival.
+
+```{r H. azteca model}
+Hmod_exp <- aov(Hyalella_alive~Location*Exp_Ref*Wat_Sed,data=cages)
+shapiro.test(resid(Hmod_exp))
+summary(Hmod_exp)
+boxplot(Hyalella_alive~Exp_Ref,data=cages)
+boxplot(Hyalella_alive~Site,data=cages,las=3)
+
+Hmod_sed <-aov(Hyalella_alive~log(Sed_Ni)*Exp_Ref*Wat_Sed*Location,data=cages)
+anova(Hmod_exp,Hmod_sed) #Adding in sediment Ni did provide an improved model
+shapiro.test(resid(Hmod_sed))
+summary(Hmod_sed)
+
+Hmod_wat <- aov(Hyalella_alive~log(Wat_Ni)*Exp_Ref*Wat_Sed*Location,data=cages)
+anova(Hmod_exp,Hmod_wat) #Water Ni did not provide an improved model
+shapiro.test(resid(Hmod_wat))
+summary(Hmod_wat)
+
+```
+
+##H. azteca plots
+
+```{r H. azteca plot}
+par(mfrow=c(1,2))
+
+Hfull <- aov(Hyalella_alive~log10(Sed_Ni)*Exp_Ref*Wat_Sed*Location,data=cages)
+Hfinal <- step(Hfull,direction="backward")
+summary(Hfinal)
+summary.lm(Hfinal)
+Hfc <-Hfinal$coef
+
+#Sediment Ni was adjusted ±0.01 log units so overlaps were avoided. Variable is called Sed_Ni_jig.
+par(pin=c(3,3))
+plot(Hyalella_alive~Sed_Ni_jig,data=Birch,col=c("tan","lightblue")[Wat_Sed],lwd=2,pch=c(15,16,22,1)[Exp_Ref:Wat_Sed],cex=1.2,log="x",xlim=c(30,1000),xaxt="n",ylab=expression(paste(italic("H. azteca")," survival (%)")),xlab=expression("Sediment Ni (mg kg"^-1*")"),yaxt="n")
+axis(2,at=seq(0,10,by=2),labels=seq(0,100,by=20),las=1)
+logaxis(1,3,1)
+mtext(expression(italic("Birchtree")),cex=1.2,line=0.5)
+text(35,9.7,"A",cex=2)
+clip(50,500,0,100)
+abline(Hfc[1],Hfc[2],col="tan",lwd=2)
+abline(Hfc[1]+Hfc[4],Hfc[2]+Hfc[7],col="lightblue",lwd=2)
+
+
+plot(Hyalella_alive~Sed_Ni_jig,data=Weir,col=c("tan","lightblue")[Wat_Sed],lwd=2,pch=c(15,16,22,1)[Exp_Ref:Wat_Sed],cex=1.2,log="x",xlim=c(30,1000),xaxt="n",ylab=expression(paste(italic("H. azteca")," survival (%)")),xlab=expression("Sediment Ni (mg kg"^-1*")"),yaxt="n")
+axis(2,at=seq(0,10,by=2),labels=seq(0,100,by=20),las=1)
+logaxis(1,3,1)
+par(xpd=T)
+legend(1200,10.75,c("Sed exp","Water exp","Sed ref","Water ref"),col=c("tan","lightblue"),pch=c(15,16,22,1),bty="n",cex=0.8,pt.cex=1)
+mtext(expression(italic("Weir")),cex=1.2,line=0.5)
+text(35,9.7,"B",cex=2)
+clip(80,600,0,100)
+abline(Hfc[1]+Hfc[5],Hfc[2]+Hfc[9],col="tan",lwd=2)
+abline(Hfc[1]+Hfc[4]+Hfc[5]+Hfc[11],Hfc[2]+Hfc[7]+Hfc[9]+Hfc[13],col="lightblue",lwd=2)
+```
+
+##L. stagnalis models
+Compare models that use either Exp/Ref, surface sediment Ni, or overlying water Ni to predict L. stagnalis survival. For snails, exposure sites 
+
+```{r L. stagnalis model}
+Lmod_exp <- aov(Lymnaea_alive~Location*Exp_Ref*Wat_Sed,data=cages)
+shapiro.test(resid(Lmod_exp)) #Not so good, but transformations don't do much better
+plot(Lmod_exp) #Can't see it getting much better
+summary(Lmod_exp)
+TukeyHSD(Lmod_exp,which=c("Exp_Ref:Wat_Sed","Location:Wat_Sed"))
+
+Lmod_sed <-aov(Lymnaea_alive~log(Sed_Ni)*Exp_Ref*Wat_Sed*Location,data=cages)
+anova(Lmod_exp,Lmod_sed) #Adding in sediment Ni did not provide any improvement
+shapiro.test(resid(Lmod_sed)) #Better than no Ni, but still not great
+summary(Lmod_sed)
+
+Lmod_wat <- aov(Lymnaea_alive~log(Wat_Ni)*Exp_Ref*Wat_Sed*Location,data=cages)
+anova(Lmod_exp,Lmod_wat) #Water Ni did not provide an improved model
+shapiro.test(resid(Lmod_wat)) #Also, not so good
+summary(Lmod_wat)
+
+```
+
+##H. azteca plots
+
+```{r L. stagnalis plot}
+par(mfrow=c(1,2))
+cages$Exp_Ref <- factor(cages$Exp_Ref,levels=c("R","E"))
+
+Lfull <- aov(Lymnaea_alive~Exp_Ref*Wat_Sed*Location,data=cages)
+Lfinal <- step(Lfull,direction="backward")
+summary(Lfinal)
+summary.lm(Lfinal)
+TukeyHSD(Lfinal) #Strange that no Tukey results are sig.
+#Looks like it's because the means flip-flop between treatments.
+
+Lmean <- with(cages, tapply(Lymnaea_alive,list(Wat_Sed,Exp_Ref),mean,na.rm=T))*10
+Lse <- with(cages, tapply(Lymnaea_alive,list(Wat_Sed,Exp_Ref),sd,na.rm=T)/sqrt(tapply(Lymnaea_alive,list(Wat_Sed,Exp_Ref),length)))*10
+
+par(pin=c(3,3))
+Lax <- barplot(Lmean,beside=T,ylim=c(0,110),las=1,col=c("tan","lightblue"),xaxt="n",ylab=expression(paste(italic("L. stagnalis")," survival (%)")))
+box()
+mtext(c("Reference","Exposure"),at=c(2,5),side=1,line=1)
+arrows(Lax,Lmean+Lse,Lax,Lmean-Lse,length=0.05,code=3,angle=90)
+par(xpd=T)
+legend(6.25,112,c("Sediment","Water"),fill=c("tan","lightblue"),bty="n")
+
+```
+
+##Original bar plots
+
+```{r bar plots}
+Hmean <- with(Birch, tapply(Hyalella_alive,list(Wat_Sed,Exp_Ref),mean,na.rm=T))*10
+Hse <- with(Birch, tapply(Hyalella_alive,list(Wat_Sed,Exp_Ref),sd,na.rm=T)/sqrt(tapply(Hyalella_alive,list(Wat_Sed,Exp_Ref),length)))*10
+
+par(pin=c(2.5,3))
+Hax <- barplot(Hmean,beside=T,ylim=c(0,110),las=1,col=c("tan","lightblue"),xaxt="n",ylab=expression(paste(italic("H. azteca")," survival (%)")))
+box()
+mtext(c("Exposure","Reference"),at=c(2,5),side=1,line=1)
+arrows(Hax,Hmean+Hse,Hax,Hmean-Hse,length=0.05,code=3,angle=90)
+legend(3.2,110,c("Sediment","Water"),fill=c("tan","lightblue"),bty="n")
+text(1.2,102,"A",cex=2)
+
+Lmean <- with(cages, tapply(Lymnaea_alive,list(Wat_Sed,Exp_Ref),mean,na.rm=T))*10
+Lse <- with(cages, tapply(Lymnaea_alive,list(Wat_Sed,Exp_Ref),sd,na.rm=T)/sqrt(tapply(Lymnaea_alive,list(Wat_Sed,Exp_Ref),length)))*10
+
+par(pin=c(2.5,3))
+Lax <- barplot(Lmean,beside=T,ylim=c(0,110),las=1,col=c("tan","lightblue"),xaxt="n",ylab=expression(paste(italic("L. stagnalis")," survival (%)")))
+box()
+mtext(c("Exposure","Reference"),at=c(2,5),side=1,line=1)
+arrows(Lax,Lmean+Lse,Lax,Lmean-Lse,length=0.05,code=3,angle=90)
+text(1.2,102,"B",cex=2)
+
+```

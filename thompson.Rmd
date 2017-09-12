@@ -1,0 +1,3183 @@
+---
+title: "Thompson Aug 2014"
+author: "Raissa Mendonca"
+output: html_document
+---
+
+Project: Thompson and Birchtree mines, Thompson, MB, Canada (NiPERA, Univ. of Michigan)
+
+Samples collected for surface water, sediment and benthic invertebrates at each sampling site. Sediment and surface water samples collected in 4 sites in reference tributaries and 10 in exposure tributaries at both mine sites. Invertebrate samples collected in 10 sites in both reference and exposure tributaries at both mine sites.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(device=quartz)
+#options(device="RStudioGD")
+par(pin=c(2.5,2.5),las=1)
+```
+
+```{r Load datasets, include=F}
+setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/Thompson/R Directory")
+library(vegan)
+library(FSA)
+
+thomp <- read.csv(file="thomp_chem.csv") # Chem variables NOT separated in .surf and .deep
+  thomp$Site <- as.factor(thomp$Site)
+  thomp$Depth <- factor(thomp$Depth,levels=c("Surface","Deep"),ordered=T)
+  thomp$SEMAVS <- (thomp$SEMNi/58.69)-thomp$AVS
+  thomp$SEMAVSfOC <- ((thomp$SEMNi/58.69)-thomp$AVS)/(thomp$C/100) # Org C corrected
+  thomp$SEMAVSfOC[thomp$SEMAVSfOC<0] <- 15 #Set neg. values as minimum SEM-AVS/fOC at all Exp sites (similar in Birch/Weir)
+  thomp$C[c(30,36)] <- NA # Outliers (not good numbers, take out from all analyses)
+  names(thomp)
+
+geochem <- read.csv(file="thomp_chem_surfdeep.csv") # Chem variables .surf and .deep, only 4 ref values
+
+allrefs <- read.csv(file="thomp_chem_allrefs.csv") # Chem variables .surf and .deep, ref values are averages
+  allrefs$SEMAVSfOC.surf[ allrefs$SEMAVSfOC.surf<0] <- 15 # Make all values min positive value from exposure sites
+  allrefs$SEMAVS.surf[ allrefs$SEMAVS.surf<0] <- 0.320 # Make all values min positive value from exposure sites
+  allrefs$Ni.Fe <- allrefs$TotalNi.surf-allrefs$ASCNi.surf # Variable of Ni corrected for Fe, i.e., portion of total nickel not bound to oxides
+  
+thomp.exp <- subset(allrefs,Effluent=="Exposure") # Chem variables .surf and .deep, thomp.exp only
+  thomp.exp$C.avg <- c(rep((mean(thomp.exp$C.surf[1:10])),times=10),rep((mean(thomp.exp$C.surf[11:20])),times=10))
+  thomp.exp$NiSEMHFO <- thomp.exp$SEMNi.surf-thomp.exp$ASCNi.surf
+  thomp.exp$NiSEMDIT <- thomp.exp$SEMNi.surf-thomp.exp$DITNi.surf
+  thomp.exp$NiSEMHFOfOC <- (thomp.exp$SEMNi.surf-thomp.exp$ASCNi.surf)/(thomp.exp$C.avg/100)
+  thomp.exp$SEMAVSfOC.avg = ((thomp.exp$SEMNi.surf/58.69)-thomp.exp$AVS.surf)/(thomp.exp$C.avg/100) # Org C corrected
+  thomp.exp$SEMAVSfOC.avg[thomp.exp$SEMAVSfOC.avg<0] = 7.130744 # Make all values > 0 to make graph on log scale; 15 is min positive value from exposure sites
+
+chem.inv <- read.csv(file="thomp_chem_inverts.csv") # Chem variables .surf and .deep, ref values are averages, TOT_AB = total abund, REL_EPH = Ephemeroptera rel abund
+  chem.inv$OL <- NULL
+  chem.inv <- cbind(chem.inv[,1:65],allrefs$Ni.Fe,chem.inv[,66:105])
+  names(chem.inv)[66] <- "Ni.Fe"
+  chem.inv$REL_EPH <- chem.inv$REL_EPH*100
+  REL_EPH.avg <- with(chem.inv,tapply(REL_EPH,list(chem.inv$Effluent),mean))
+  #REL_EPH.exp <- mean(chem.inv.exp[c(3,4,7,14,19,20),"REL_EPH"])  #Mean EPH rel abund. in exp sites closest to the mouth of the tributary ("less contaminated")
+    REL_EPH.exp <- 43 #Eph rel abund at BE4 and WE10, only two exp sites within mean +/- s.d. or s.e. of background [Ni] (mean at ref sites); both sites had same Eph rel abund of 0.43
+    REL_EPH.BE <- mean(chem.inv.exp[c(3,4,7),"REL_EPH"])
+    REL_EPH.WE <- mean(chem.inv.exp[c(14,19,20),"REL_EPH"])
+  chem.inv$SEMAVSfOC.surf[chem.inv$SEMAVSfOC.surf<0] <- 15
+  chem.inv$SEMAVS.surf[chem.inv$SEMAVS.surf<0] <- 0.320
+  
+chem.inv.exp <- subset(chem.inv,Effluent=="Exposure")
+  chem.inv.exp$NiSEMHFO <- thomp.exp$NiSEMHFO
+  chem.inv.exp$NiSEMDIT <- thomp.exp$NiSEMDIT
+  chem.inv.exp$NiSEMHFOfOC <- thomp.exp$NiSEMHFOfOC
+  chem.inv.exp$SEMAVSfOC.avg <- thomp.exp$SEMAVSfOC.avg
+    
+benthos <- read.csv(file="thomp_benthos.csv") # Only benthic inverts (excluded cladocera, water mites and fish)
+  benthos$OL <- NULL
+benthos.exp <- benthos[c(11:20,31:40),]
+  
+arealdens <- read.csv(file="thomp_arealdensity.csv") # Invert areal density (#/m2)
+arealdens$OL <- NULL
+
+biomass <- read.csv(file="thomp_hexbiomass.csv")
+biomass$Site <- as.factor(biomass$Site)
+biomass[24,] = NA
+summary(biomass)
+```
+
+```{r Subsets and kd, include=F}
+Birch <- subset(thomp,thomp$Location=="Birchtree")
+Weir <- subset(thomp,thomp$Location=="Weir")
+BR <- subset(Birch,Birch$Effluent=="Reference")
+WR <- subset(Weir,Weir$Effluent=="Reference")
+BE <- subset(Birch,Birch$Effluent=="Exposure")
+WE <- subset(Weir,Weir$Effluent=="Exposure")
+
+surf <- subset(thomp[,c(1:31,41:42)],thomp$Depth=="Surface") # Surface sediment variables
+deep <- subset(thomp[,c(1:31,41:42)],thomp$Depth=="Deep") # Deep sediment variables
+water <- thomp[c(1:28),c(1:4,32:40)] # water related variables
+
+birch.kd <- mean(log10(((surf$TotalNi[surf$Location=="Birchtree"])*1000)/water$Ni[water$Location=="Birchtree"]))
+weir.kd <- mean(log10(((surf$TotalNi[surf$Location=="Weir"])*1000)/water$Ni[water$Location=="Weir"]))
+
+BE.kd <- mean(log10(((BE$TotalNi[BE$Depth=="Surface"])*1000)/BE$Ni[BE$Depth=="Surface"]))
+WE.kd <- mean(log10(((WE$TotalNi[WE$Depth=="Surface"])*1000)/WE$Ni[WE$Depth=="Surface"]))
+```
+
+# Mean and std. deviation of variables depicted on NiPERA report table
+```{r BirchRef table, include=F}
+BirchRef <- matrix(data=NA,ncol=12,nrow=2,dimnames=list(c("Mean","Std. dev"),c("AVS.surf","AVS.deep","C.surf","C.deep","ASCFe.surf","ASCFe.deep","CrysFe.surf","CrysFe.deep","TotalFe.surf","TotalFe.deep","TotalMn.surf","TotalMn.deep")))
+BirchRef[1,c(1:2)] = tapply((BR$AVS),BR$Depth,geomean,na.rm=T)
+BirchRef[2,c(1:2)] = tapply((BR$AVS),BR$Depth,geosd,na.rm=T)
+BirchRef[1,c(3:4)] = tapply((BR$C),BR$Depth,mean,na.rm=T)
+BirchRef[2,c(3:4)] = tapply((BR$C),BR$Depth,sd,na.rm=T)
+BirchRef[1,c(5:6)] = tapply((BR$ASCFe),BR$Depth,mean,na.rm=T)
+BirchRef[2,c(5:6)] = tapply((BR$ASCFe),BR$Depth,sd,na.rm=T)
+BirchRef[1,c(7:8)] = tapply((BR$CrysFe),BR$Depth,mean,na.rm=T)
+BirchRef[2,c(7:8)] = tapply((BR$CrysFe),BR$Depth,sd,na.rm=T)
+BirchRef[1,c(9:10)] = tapply((BR$TotalFe),BR$Depth,mean,na.rm=T)
+BirchRef[2,c(9:10)] = tapply((BR$TotalFe),BR$Depth,sd,na.rm=T)
+BirchRef[1,c(11:12)] = tapply((BR$TotalMn),BR$Depth,mean,na.rm=T)
+BirchRef[2,c(11:12)] = tapply((BR$TotalMn),BR$Depth,sd,na.rm=T)
+```
+
+```{r BirchExp table, include=F}
+BirchExp <- matrix(data=NA,ncol=12,nrow=2,dimnames=list(c("Mean","Std. dev"),c("AVS.surf","AVS.deep","C.surf","C.deep","ASCFe.surf","ASCFe.deep","CrysFe.surf","CrysFe.deep","TotalFe.surf","TotalFe.deep","TotalMn.surf","TotalMn.deep")))
+BirchExp[1,c(1:2)] = tapply((BE$AVS),BE$Depth,geomean,na.rm=T)
+BirchExp[2,c(1:2)] = tapply((BE$AVS),BE$Depth,geosd,na.rm=T)
+BirchExp[1,c(3:4)] = tapply((BE$C),BE$Depth,mean,na.rm=T)
+BirchExp[2,c(3:4)] = tapply((BE$C),BE$Depth,sd,na.rm=T)
+BirchExp[1,c(5:6)] = tapply((BE$ASCFe),BE$Depth,mean,na.rm=T)
+BirchExp[2,c(5:6)] = tapply((BE$ASCFe),BE$Depth,sd,na.rm=T)
+BirchExp[1,c(7:8)] = tapply((BE$CrysFe),BE$Depth,mean,na.rm=T)
+BirchExp[2,c(7:8)] = tapply((BE$CrysFe),BE$Depth,sd,na.rm=T)
+BirchExp[1,c(9:10)] = tapply((BE$TotalFe),BE$Depth,mean,na.rm=T)
+BirchExp[2,c(9:10)] = tapply((BE$TotalFe),BE$Depth,sd,na.rm=T)
+BirchExp[1,c(11:12)] = tapply((BE$TotalMn),BE$Depth,mean,na.rm=T)
+BirchExp[2,c(11:12)] = tapply((BE$TotalMn),BE$Depth,sd,na.rm=T)
+```
+
+```{r WeirRef table, include=F}
+WeirRef <- matrix(data=NA,ncol=12,nrow=2,dimnames=list(c("Mean","Std. dev"),c("AVS.surf","AVS.deep","C.surf","C.deep","ASCFe.surf","ASCFe.deep","CrysFe.surf","CrysFe.deep","TotalFe.surf","TotalFe.deep","TotalMn.surf","TotalMn.deep")))
+WeirRef[1,c(1:2)] = tapply((WR$AVS),WR$Depth,geomean,na.rm=T)
+WeirRef[2,c(1:2)] = tapply((WR$AVS),WR$Depth,geosd,na.rm=T)
+WeirRef[1,c(3:4)] = tapply((WR$C),WR$Depth,mean,na.rm=T)
+WeirRef[2,c(3:4)] = tapply((WR$C),WR$Depth,sd,na.rm=T)
+WeirRef[1,c(5:6)] = tapply((WR$ASCFe),WR$Depth,mean,na.rm=T)
+WeirRef[2,c(5:6)] = tapply((WR$ASCFe),WR$Depth,sd,na.rm=T)
+WeirRef[1,c(7:8)] = tapply((WR$CrysFe),WR$Depth,mean,na.rm=T)
+WeirRef[2,c(7:8)] = tapply((WR$CrysFe),WR$Depth,sd,na.rm=T)
+WeirRef[1,c(9:10)] = tapply((WR$TotalFe),WR$Depth,mean,na.rm=T)
+WeirRef[2,c(9:10)] = tapply((WR$TotalFe),WR$Depth,sd,na.rm=T)
+WeirRef[1,c(11:12)] = tapply((WR$TotalMn),WR$Depth,mean,na.rm=T)
+WeirRef[2,c(11:12)] = tapply((WR$TotalMn),WR$Depth,sd,na.rm=T)
+```
+
+```{r WeirExp table, include=F}
+WeirExp <- matrix(data=NA,ncol=12,nrow=2,dimnames=list(c("Mean","Std. dev"),c("AVS.surf","AVS.deep","C.surf","C.deep","ASCFe.surf","ASCFe.deep","CrysFe.surf","CrysFe.deep","TotalFe.surf","TotalFe.deep","TotalMn.surf","TotalMn.deep")))
+WeirExp[1,c(1:2)] = tapply((WE$AVS),WE$Depth,geomean,na.rm=T)
+WeirExp[2,c(1:2)] = tapply((WE$AVS),WE$Depth,geosd,na.rm=T)
+WeirExp[1,c(3:4)] = tapply((WE$C),WE$Depth,mean,na.rm=T)
+WeirExp[2,c(3:4)] = tapply((WE$C),WE$Depth,sd,na.rm=T)
+WeirExp[1,c(5:6)] = tapply((WE$ASCFe),WE$Depth,mean,na.rm=T)
+WeirExp[2,c(5:6)] = tapply((WE$ASCFe),WE$Depth,sd,na.rm=T)
+WeirExp[1,c(7:8)] = tapply((WE$CrysFe),WE$Depth,mean,na.rm=T)
+WeirExp[2,c(7:8)] = tapply((WE$CrysFe),WE$Depth,sd,na.rm=T)
+WeirExp[1,c(9:10)] = tapply((WE$TotalFe),WE$Depth,mean,na.rm=T)
+WeirExp[2,c(9:10)] = tapply((WE$TotalFe),WE$Depth,sd,na.rm=T)
+WeirExp[1,c(11:12)] = tapply((WE$TotalMn),WE$Depth,mean,na.rm=T)
+WeirExp[2,c(11:12)] = tapply((WE$TotalMn),WE$Depth,sd,na.rm=T)
+```
+
+```{r Read tables, tidy=T}
+BirchRef
+BirchExp
+WeirRef
+WeirExp
+
+## Geometric means and std dev. for AVS
+geomean(thomp$AVS[thomp$Depth=="Surface"])
+geosd(thomp$AVS[thomp$Depth=="Surface"])
+geomean(thomp$AVS[thomp$Depth=="Deep"])
+geosd(thomp$AVS[thomp$Depth=="Deep"])
+```
+
+# Graphing function
+```{r Log axis function, include=F}
+# Graphing function: log axis without xlab
+logaxis <- function(minlog,maxlog,side){
+  pow <- seq(minlog,maxlog,by=1)
+  ticksat <- as.vector(sapply(pow, function(p) (1:10)*10^p))
+  axis(side, 10^pow,las=3, cex.axis=0.75,labels=NA)
+  axis(side, ticksat, labels=NA, tcl=-0.25, lwd=0, lwd.ticks=1)
+}
+```
+
+# ES&T TOC Graphs
+```{r ES&T TOC graphs}
+##AVS
+par(pin=c(1,1))
+plot(AVS~Depth,data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Surface",],log="y",ylim=c(0.01,10),xlim=c(0.25,2.5),xlab="",ylab="",las=3,yaxt="n",at=c(0.75,2),yaxt="n",col="orange3", cex.axis=0.75)
+plot(AVS~Depth,data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Deep",],log="y",ylim=c(0.01,10),xlim=c(0.25,2.5),xlab="",ylab="",las=3,yaxt="n",xaxt="n",at=c(0.75,2),yaxt="n",col="tan4",add=T)
+
+axis(side=2, at=0.3, line=1.6,label=expression(paste("Acid-volatile")),tick <- F, cex.axis=0.75, las=3)
+axis(side=2, at=0.3, line=0.7,label=expression(paste("sulfide (µmol g"^"-1"," dw)")),tick <- F, cex.axis=0.75, las=3)
+logaxis(-2,1,2)
+axis(side=2,at=c(.1,10),labels=c(0.10,10.0),cex.axis=0.75)
+text(0.75,1.3,labels="*",font=2,col="tomato2")
+
+#points(0.75,as.numeric(mean((thomp$AVS[thomp$Depth=="Surface"&thomp$Effluent=="Reference"]))),pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Surface average
+#points(2,as.numeric(mean((thomp$AVS[thomp$Depth=="Deep"&thomp$Effluent=="Reference"]))),pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+
+##NiHFO
+par(pin=c(1,1))
+plot((ASCNi/TotalNi)~Depth,
+     data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Surface",],
+     log="y",ylim=c(0.1,1),xlim=c(0.25,2.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(0.75,2),yaxt="n",col="orange3",cex.axis=0.75)
+
+plot((ASCNi/TotalNi)~Depth,
+     data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Deep",],
+     log="y",xlab="",ylab="",las=2,yaxt="n",xaxt="n",at=c(0.75,2),yaxt="n",col="tan4",add=T)
+
+
+axis(side=2, at=0.35, line=0.7,label=expression(paste("Ni bound to FeO"[x]*" (%)")),tick <- F,cex.axis=0.75, las=3)
+logaxis(-1,0,2)
+axis(side=2,at=c(.1,1),labels=c(1,10),cex.axis=0.75)
+text(0.75,0.75,labels="*",font=2,col="tomato2")
+
+##Double axis
+
+#Surface
+par(pin=c(1,2))
+plot(AVS~Depth,data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Surface",],log="y",ylim=c(0.01,10),xlim=c(0.25,2.5),xlab="",ylab="",las=3,yaxt="n",at=c(0.75,2),xaxt="n",col="orange3", cex.axis=0.75)
+plot((ASCNi/TotalNi)~Depth,
+     data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Surface",],
+     log="y",ylim=c(0.01,1),xlim=c(0.25,2.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(2,0),xaxt="n",col="orange3",cex.axis=0.75,add=T)
+
+axis(side=2, at=0.3, line=0.7,label=expression(paste("Acid-volatile sulfide (µmol g"^"-1"," dw)")),tick <- F, cex.axis=0.75, las=3)
+logaxis(-2,1,2)
+axis(side=2,at=c(0.01,0.1,1,10),labels=c(0.01,0.1,1.0,10.0),cex.axis=0.75,las=3)
+
+axis(side=4, at=0.35, line=0.8,label=expression(paste("Ni bound to FeO"[x]*" (%)")),tick <- F,cex.axis=0.75,las=3)
+logaxis(-2,0,4)
+axis(side=4,at=c(0.01,0.1,1,10),labels=c(0.01,0.1,1.0,10.0),cex.axis=0.75,las=3, line=0)
+text(x=1.375,y=0.0045,label="OXIC", srt=180, xpd=T, cex=0.8, font=2)
+
+#Deep
+par(pin=c(1,2))
+plot(AVS~Depth,data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Deep",],log="y",ylim=c(0.01,10),xlim=c(0.25,2.5),xlab="",ylab="",las=3,yaxt="n",at=c(2,0.75),xaxt="n",col="tan4", cex.axis=0.75)
+plot((ASCNi/TotalNi)~Depth,
+     data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Deep",],
+     log="y",ylim=c(0.01,1),xlim=c(0.25,2.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(0.75,2),xaxt="n",col="tan4",cex.axis=0.75,add=T)
+
+axis(side=2, at=0.3, line=0.7,label=expression(paste("Acid-volatile sulfide (µmol g"^"-1"," dw)")),tick <- F, cex.axis=0.75, las=3)
+logaxis(-2,1,2)
+axis(side=2,at=c(0.01,0.1,1,10),labels=c(0.01,0.1,1.0,10.0),cex.axis=0.75,las=3)
+
+axis(side=4, at=0.35, line=0.8,label=expression(paste("Ni bound to FeO"[x]*" (%)")),tick <- F,cex.axis=0.75,las=3)
+logaxis(-2,0,4)
+axis(side=4,at=c(0.01,0.1,1,10),labels=c(0.01,0.1,1.0,10.0),cex.axis=0.75,las=3, line=0)
+text(x=1.375,y=0.0045,label="ANOXIC", srt=180, xpd=T, cex=0.8, font=2)
+
+##Double axes, one box, colorful axis
+par(pin=c(2.8,2.5))
+boxplot(AVS~Depth,data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Surface",],log="y",ylim=c(0.01,10),xlim=c(0,5),xlab="",ylab="",las=3,yaxt="n",at=c(0.5,0.5),xaxt="n", cex.axis=0.9)
+boxplot(AVS~Depth,data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Deep",],log="y",ylim=c(0.01,10),xlim=c(0,5),xlab="",ylab="",las=3,yaxt="n",at=c(3.5,3.5),xaxt="n", cex.axis=0.9, add=T)
+axis(side=2, at=0.3, line=0.9,label=expression(paste("Acid-volatile sulfide (µmol g"^"-1"," dw)")),tick=F, cex.axis=0.9, las=3)
+logaxis(-2,1,2)
+axis(side=2,at=c(0.01,0.1,1,10),labels=c(0.01,0.1,1.0,10.0),cex.axis=0.9,las=3)
+text(x=1,y=0.0045,label="OXIC", srt=180, xpd=T, cex=0.8, font=2)
+text(x=4,y=0.0045,label="ANOXIC", srt=180, xpd=T, cex=0.8, font=2)
+
+par(new=T)
+boxplot((ASCNi/TotalNi)~Depth,
+     data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Surface",],
+     ylim=c(0.1,0.6),xlim=c(0,5), xlab="",ylab="",las=3,yaxt="n",at=c(1.5,1.5),xaxt="n",border="red",cex.axis=0.9, col.lab="red")
+boxplot((ASCNi/TotalNi)~Depth,
+     data=thomp[thomp$Effluent=="Exposure"&thomp$Depth=="Deep",],
+     ylim=c(0.1,0.6),xlim=c(0,5), xlab="",ylab="",las=3,yaxt="n",at=c(4.5,4.5),xaxt="n", border="red",cex.axis=0.9,add=T)
+
+axis(side=4, at=0.35, line=1.1,label=expression(paste("Ni bound to FeO"[x]*" (%)")),tick=F,cex.axis=0.9,las=3,col.axis="red")
+axis(side=4,at=c(0,0.1,0.2,0.3,0.4,0.5,0.6,1),labels=c("",10,20,30,40,50,60,""),cex.axis=0.9,las=3, line=0, col="red",col.axis="red")
+
+text(x=0.5,y=0.3, "AVS",srt=90,cex=0.75)
+text(x=1.5,y=0.37, labels=expression("Ni"[HFO]*""),srt=90,cex=0.75,col="red")
+text(x=3.5,y=0.445, "AVS",srt=90,cex=0.75)
+text(x=4.5,y=0.38, labels=expression("Ni"[HFO]*""),srt=90,cex=0.75, col="red")
+
+```
+
+# Sediment chemistry models and plots
+
+## AVS
+```{r AVS stats, fig.align='center', tidy=TRUE}
+### Depth (p < 0.001) and Effluent (p <- 0.017) significant
+AVSmod <- aov(log(AVS)~Location*Effluent*Depth,data=thomp)
+summary(AVSmod)
+shapiro.test(resid(AVSmod))
+par(mfrow=c(1,2))
+plot(AVSmod,which=c(1,2))
+TukeyHSD(AVSmod,which=c("Depth","Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(AVS~Depth*Effluent,data=thomp,las=2,log="y")
+
+# For % difference: (e^result : e^result) - 1 [Ex: (e^4.30 : e^5.42) -1 = -0.67 -> 67% reduction)]
+
+### 87% (Birch) and 76% (Weir) reduction in AVS from deep to surface sediments
+tapply(log(Birch$AVS),Birch$Depth,mean)
+tapply(log(Weir$AVS),Weir$Depth,mean)
+
+### 82% overall reduction in AVS from deep to surface sediments 
+tapply(log(thomp$AVS),thomp$Depth,mean)
+
+### Surface sediments had lower AVS and exposure sites had greater AVS
+tapply(log(thomp[thomp$Effluent=="Reference",]$AVS),thomp[thomp$Effluent=="Reference",]$Depth,mean)
+tapply(log(thomp[thomp$Effluent=="Exposure",]$AVS),thomp[thomp$Effluent=="Exposure",]$Depth,mean)
+```
+
+### AVS exp plot for Birch and Weir with ref average symbols
+```{r AVS graphs, fig.align='center', tidy=TRUE}
+par(pin=c(3,1.5))
+plot(AVS~Depth,data=BE,log="y",ylim=c(0.01,10),xlim=c(0.25,5.5),xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25),yaxt="n")
+
+axis(side=2, at=0.3, line=2,label=expression(paste("AVS (µmol g"^"-1"," dw)")),tick <- F)
+plot(AVS~Depth,data=WE,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(-2,1,2)
+axis(side=2,at=c(.1,10),labels=c(0.10,10.0),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$AVS[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$AVS[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$AVS[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$AVS[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## CARBON
+
+### Effluent (p <- 0.01) and Location:Effluent (p < 0.001) significant
+```{r Carbon stats, fig.align='center', tidy=TRUE}
+Cmod <- aov(C~Location*Effluent*Depth,data=thomp)
+summary(Cmod)
+shapiro.test(resid(Cmod))
+par(mfrow=c(1,2))
+plot(Cmod,which=c(1,2))
+TukeyHSD(Cmod,which <- c("Effluent","Location:Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(C~Location*Effluent,data=thomp,las=2)
+```
+
+### 36% (Birch) reduction in C from reference to exposure sites (higher C content on Birch ref) 
+```{r fig.align='center',tidy=TRUE}
+tapply((Birch$C),Birch$Effluent,mean,na.rm=T)
+tapply((Weir$C),Weir$Effluent,mean,na.rm=T)
+```
+
+### C exp plot for Birch and Weir with ref average symbols
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+plot(C~Effluent,data=Birch,ylim=c(0,10),xlim=c(0.25,5.5),xlab="",ylab="C content (%)",yaxt="n",las=3,at=c(1.25,2.25))
+
+plot(C~Effluent,data=Weir,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0,2,4,6,8,10),labels=c(0,2,4,6,8,10),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$C[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$C[BR$Depth=="Deep"]),na.rm=T)),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$C[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$C[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## *NICKEL VARIABLES*
+
+## TOTAL Ni MODEL
+
+### Location (p=0.0158), Effluent (p < 0.001) and Sample.ID (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+TOTNimod <- aov(log(TotalNi)~Location*Effluent*Depth+Sample.ID,data=thomp)
+summary(TOTNimod)
+shapiro.test(resid(TOTNimod)) # Shapiro Wilk returning p < 0.05 but redisual plots look fine
+par(mfrow=c(1,2))
+plot(TOTNimod,which=c(1,2))
+TukeyHSD(TOTNimod,which <- c("Location","Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(TotalNi)~Location*Effluent,data=thomp,las=2)
+```
+
+### 67% (Birch) and 81% (Weir) reduction in Total Ni from reference to exposure sites (more Ni on exp sites than ref)
+```{r fig.align='center',tidy=TRUE}
+tapply(log(Birch$TotalNi),Birch$Effluent,mean)
+tapply(log(Weir$TotalNi),Weir$Effluent,mean)
+```
+
+### 11% more Ni on Birch than Weir (41% more Ni Birch ref than Weir ref, 4% more Ni Weir exp than Birch exp [not significant])
+```{r fig.align='center',tidy=TRUE}
+tapply(log(thomp$TotalNi),thomp$Location,mean)
+
+tapply(log(thomp[thomp$Effluent=="Reference",]$TotalNi),
+       thomp[thomp$Effluent=="Reference",]$Location,mean)
+
+tapply(log(thomp[thomp$Effluent=="Exposure",]$TotalNi),
+       thomp[thomp$Effluent=="Exposure",]$Location,mean)
+```
+
+```{r include=F}
+### Total Ni plots (rough graphs)
+par(pin=c(3,3))
+boxplot(TotalNi~Depth*Effluent,data=Birch,las=2)
+boxplot(TotalNi~Depth*Effluent,data=Weir,las=2)
+```
+
+### Total Ni plots
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+par(xpd=TRUE) # Legends can be placed outside plot area
+plot(TotalNi~Effluent,data=Birch,ylim=c(10,600),xlim=c(0.5,5.5),xlab="",ylab="Total Ni (mg/kg)",las=3,yaxt="n",at=c(1.25,2.25))
+plot(TotalNi~Effluent,data=Weir,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(50,100,250,500),labels=c(50,100,250,500),cex.axis=0.9)
+text(1.25,510,"a", font=3)
+text(2.25,130,"b", font=3)
+text(4,580,"a", font=3)
+text(5,80,"c", font=3)
+```
+
+## SEM Ni MODEL
+
+### Location (p <- 0.002), Effluent (p < 0.001) and Location:Effluent (p <- 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+SNimod <- aov((SEMNi/TotalNi)~Location*Effluent*Depth,data=thomp)
+summary(SNimod)
+shapiro.test(resid(SNimod))
+par(mfrow=c(1,2))
+plot(SNimod,which=c(1,2))
+TukeyHSD(SNimod,which=c("Location","Effluent","Location:Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot((SEMNi/TotalNi)~Location*Effluent,data=thomp,las=2)
+```
+
+### 8% (Birch) and 40% (Weir) reduction in %SEMNi from exposure to reference sites (more on exp)
+```{r fig.align='center',tidy=TRUE}
+tapply((Birch$SEMNi/Birch$TotalNi),Birch$Effluent,mean)
+tapply((Weir$SEMNi/Weir$TotalNi),Weir$Effluent,mean)
+```
+
+### SEMNi plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((SEMNi/TotalNi)~Depth,data=BE,log="y",ylim=c(0.1,10),xlim=c(0.25,5.5),xlab="",ylab=expression(paste("Ni"[SEM]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((SEMNi/TotalNi)~Depth,data=WE,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(-1,1,2)
+
+points(1.25,as.numeric(mean((BR$SEMNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$SEMNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$SEMNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$SEMNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *y-axis not log transformed*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((SEMNi/TotalNi)~Depth,data=BE,ylim=c(0.2,1.2),xlim=c(0.25,5.5),xlab="",ylab=expression(paste("Ni"[SEM]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((SEMNi/TotalNi)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.2,0.4,0.6,0.8,1,1.2),labels=c(20,40,60,80,100,120),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$SEMNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$SEMNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$SEMNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$SEMNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## AMORPHOUS Ni MODEL
+
+### Location (p <- 0.006), Effluent (p <- 0.03), Depth (p < 0.001) and Location:Effluent (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+HNimod <- aov(log(ASCNi/TotalNi)~Location*Effluent*Depth,data=thomp)
+summary(HNimod)
+shapiro.test(resid(HNimod))
+par(mfrow=c(1,2))
+plot(HNimod,which=c(1,2))
+TukeyHSD(HNimod,which <- c("Location","Effluent","Depth","Location:Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(ASCNi/TotalNi)~Depth*Location*Effluent,data=thomp,las=2) 
+```
+
+### 29% (Birch) and 34% (Weir) reduction in %ASCNi from surface to deep sediments 
+```{r fig.align='center',tidy=TRUE}
+tapply(log((Birch$ASCNi/Birch$TotalNi)),Birch$Depth,mean)
+tapply(log((Weir$ASCNi/Weir$TotalNi)),Weir$Depth,mean)
+```
+
+### 18% (Birch) more %ASCNi on reference tributary; 46% (Weir) less %ASCNi on reference tributary (or 85% more) 
+```{r fig.align='center',tidy=TRUE}
+tapply(log((Birch$ASCNi/Birch$TotalNi)),Birch$Effluent,mean)
+tapply(log((Weir$ASCNi/Weir$TotalNi)),Weir$Effluent,mean)
+```
+
+### 28% less %ASCNi in Weir ref than Birch ref, 61% more %ASCNi in Weir exp than Birch exp (or 38% less)
+```{r fig.align='center',tidy=TRUE}
+tapply(log((thomp[thomp$Effluent=="Reference",]$ASCNi)/(thomp[thomp$Effluent=="Reference",]$TotalNi)),
+       thomp[thomp$Effluent=="Reference",]$Location,mean)
+
+tapply(log((thomp[thomp$Effluent=="Exposure",]$ASCNi)/(thomp[thomp$Effluent=="Exposure",]$TotalNi)),
+       thomp[thomp$Effluent=="Exposure",]$Location,mean)
+```
+
+### ASCNi plots
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,1.5))
+
+plot((ASCNi/TotalNi)~Depth,data=BE,log="y",ylim=c(0.1,1),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[HFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((ASCNi/TotalNi)~Depth,data=WE,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(-1,0,2)
+
+points(1.25,as.numeric(mean((BR$ASCNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$ASCNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$ASCNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$ASCNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *y-axis not log transformed: same as plotting variable PAmNi~Depth*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+par(pin=c(3,1.5))
+plot((ASCNi/TotalNi)~Depth,data=BE,ylim=c(0,0.6),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[HFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((ASCNi/TotalNi)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0,0.1,0.2,0.3,0.4,0.5,0.6),labels=c(0,10,20,30,40,50,60),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$ASCNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$ASCNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$ASCNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$ASCNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+```{r include=F}
+### *ASCNi (Total concentration of Ni associated to amorphous Fe oxides)*
+par(pin=c(3,3))
+
+plot(ASCNi~Depth,data=BE,ylim=c(0,275),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[HFO]*" (mg kg"^"-1", "dw)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(ASCNi~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0,50,100,150,200,250),labels=c(0,50,100,150,200,250),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$ASCNi[BR$Depth=="Surface"]))),pch=23,
+       col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$ASCNi[BR$Depth=="Deep"]))),pch=23,
+       col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$ASCNi[WR$Depth=="Surface"]))),pch=23,
+       col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$ASCNi[WR$Depth=="Deep"]))),pch=23,
+       col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## CRYSTALLINE Ni MODEL
+
+### Effluent (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+CNimod <- aov((CrysNi/TotalNi)~Location*Effluent*Depth,
+             data=thomp[c(1:35,37:56),]) # Removed line 36 (BE4 deep) from analysis: outlier
+summary(CNimod)
+shapiro.test(resid(CNimod))
+par(mfrow=c(1,2))
+plot(CNimod,which=c(1,2))
+TukeyHSD(CNimod,which = "Effluent")
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot((CrysNi/TotalNi)~Effluent,data=thomp[c(1:35,37:56),],las=2)
+```
+
+### 56% (Birch) and 42% (Weir) less %CrysNi in reference than exposure sites
+```{r fig.align='center',tidy=TRUE}
+tapply((thomp[thomp$Location=="Birchtree",]$CrysNi)/(thomp[thomp$Location=="Birchtree",]$TotalNi),
+       thomp[thomp$Location=="Birchtree",]$Effluent,mean)
+
+tapply((thomp[thomp$Location=="Weir",]$CrysNi)/(thomp[thomp$Location=="Weir",]$TotalNi),
+       thomp[thomp$Location=="Weir",]$Effluent,mean)
+```
+
+### Overall 46% less %CrysNi in reference than exposure sites
+```{r fig.align='center',tidy=TRUE}
+tapply((thomp$CrysNi)/(thomp$TotalNi),thomp$Effluent,mean)
+```
+
+### CrysNi plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((CrysNi/TotalNi)~Depth,data=BE,log="y",ylim=c(0.01,10),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[CFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((CrysNi/TotalNi)~Depth,data=WE,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(-2,1,2)
+
+points(1.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$CrysNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$CrysNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+```{r include=F}
+### *y-axis not log transformed: same as plotting PCrysNi~Depth*
+par(pin=c(3,3))
+
+plot((CrysNi/TotalNi)~Depth,data=BE,ylim=c(0,0.75),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[CFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((CrysNi/TotalNi)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7),labels=c(10,20,30,40,50,60,70),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$CrysNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$CrysNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *Plot without line 36 (outlier) for Birch Exp*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((CrysNi/TotalNi)~Depth,data=BE[c(1:13,15:20),],ylim=c(0,0.75),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[CFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((CrysNi/TotalNi)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7),labels=c(10,20,30,40,50,60,70),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Surface"]/BR$TotalNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Deep"]/BR$TotalNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$CrysNi[WR$Depth=="Surface"]/WR$TotalNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$CrysNi[WR$Depth=="Deep"]/WR$TotalNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+```{r include=F}
+### *CrysNi (Total concentration of Ni associated to crystalline Fe oxides)*
+par(pin=c(3,3))
+
+plot(CrysNi~Depth,data=BE,ylim=c(0,275),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Ni"[CFO]*" (mg kg"^"-1"," ", "dw)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(CrysNi~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0,50,100,150,200,250),labels=c(0,50,100,150,200,250),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$CrysNi[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$CrysNi[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$CrysNi[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## MOLAR RATIO (Ni:Fe)
+```{r Molar ratios}
+# Birch Exp
+BmolFeavg = (BE$ASCFe[BE$Depth=="Surface"]/1000000)/55.845
+BmolNiavg = (BE$ASCNi[BE$Depth=="Surface"]/1000000)/58.6934
+Bmolratio <- BmolNiavg/BmolFeavg
+mean(Bmolratio)
+sd(Bmolratio)
+
+# Weir Exp
+WmolFeavg = (WE$ASCFe[WE$Depth=="Surface"]/1000000)/55.845
+WmolNiavg = (WE$ASCNi[WE$Depth=="Surface"]/1000000)/58.6934
+Wmolratio <- WmolNiavg/WmolFeavg
+mean(Wmolratio)
+sd(Wmolratio)
+
+t.test(Bmolratio,Wmolratio)
+
+am.molFeavg = (surf$ASCFe[surf$Effluent=="Exposure"]/1000000)/55.845
+am.molNiavg = (surf$ASCNi[surf$Effluent=="Exposure"]/1000000)/58.6934
+am.molratio <- am.molNiavg/am.molFeavg
+mean(am.molratio)
+sd(am.molratio)
+
+crys.molFeavg = (surf$CrysFe[surf$Effluent=="Exposure"]/1000000)/55.845
+crys.molNiavg = (surf$CrysNi[surf$Effluent=="Exposure"]/1000000)/58.6934
+crys.molratio <- crys.molNiavg/crys.molFeavg
+mean(crys.molratio)
+sd(crys.molratio)
+
+```
+
+## *IRON VARIABLES*
+
+## TOTAL Fe MODEL
+
+### Location:Effluent (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+TOTFemod <- aov(TotalFe~Location*Effluent*Depth,data=thomp)
+summary(TOTFemod)
+shapiro.test(resid(TOTFemod))
+par(mfrow=c(1,2))
+plot(TOTFemod,which=c(1,2))
+TukeyHSD(TOTFemod,which = ("Location:Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(TotalFe~Location*Effluent,data=thomp,las=2)
+```
+
+### 9% (Birch) reduction in Total Fe from reference to exposure sites and 19% (Weir) increase in Total Fe from reference to exposure sites
+```{r fig.align='center',tidy=TRUE}
+tapply((Birch$TotalFe),Birch$Effluent,mean)
+tapply((Weir$TotalFe),Weir$Effluent,mean)
+```
+
+```{r include=F}
+### Total Fe plots (rough graphs)
+par(pin=c(3,3))
+boxplot(TotalFe~Effluent,data=Birch,las=2) # Birch
+boxplot(TotalFe~Effluent,data=Weir,las=2) # Weir
+```
+
+### Total Fe plots
+
+```{r include=F}
+### Birch surf and deep, exp and ref
+par(pin=c(3,3))
+
+plot(TotalFe~Effluent,data=surf[surf$Location=="Birchtree",],
+     ylim=c(20000,40000),xlim=c(0.25,5.5),xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(TotalFe~Effluent,data=deep[deep$Location=="Birchtree",],add=T,at=c(4,5),
+     yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab="Total Fe (mg/kg)",line=4,main="Birch")
+axis(side=2,at=c(22500,27500,32500,37500),labels=c("22,500","27,500","32,500","37,500"),las=2,cex.axis=0.9)
+
+text(1.75,43000,"Surf")
+text(4.5,43000,"Deep")
+
+### Weir surf and deep, exp and ref
+par(pin=c(3,3))
+
+plot(TotalFe~Effluent,data=surf[surf$Location=="Weir",],
+     ylim=c(20000,40000),xlim=c(0.25,5.5),xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(TotalFe~Effluent,data=deep[deep$Location=="Weir",],add=T,at=c(4,5),
+     yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab="Total Fe (mg/kg)",line=4,main="Weir")
+axis(side=2,at=c(22500,27500,32500,37500),labels=c("22,500","27,500","32,500","37,500"),las=2,cex.axis=0.9)
+
+text(1.75,43000,"Surf")
+text(4.5,43000,"Deep")
+```
+
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot(TotalFe~Effluent,data=Birch,ylim=c(20000,40000),xlim=c(0.25,5.5),xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+plot(TotalFe~Effluent,data=Weir,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab="Total Fe (mg/kg)",line=4)
+axis(side=2,at=c(22500,27500,32500,37500),labels=c("22,500","27,500","32,500","37,500"),las=2,cex.axis=0.9)
+```
+
+## SEM Fe MODEL
+
+### Location (p <- 0.004) and Effluent (p <- 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+SFemod <- aov((SEMFe/TotalFe)~Location*Effluent*Depth,data=thomp)
+summary(SFemod)
+shapiro.test(resid(SFemod))
+par(mfrow=c(1,2))
+plot(SFemod,which=c(1,2))
+TukeyHSD(SFemod,which <- c("Location","Effluent"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot((SEMFe/TotalFe)~Location*Effluent,data=thomp,las=2)
+```
+
+### 6% (Birch) less %SEMFe on exposure sites; 2% (Weir) less %SEMFe on reference sites
+```{r fig.align='center',tidy=TRUE}
+tapply((Birch$SEMFe/Birch$TotalFe),Birch$Effluent,mean)
+tapply((Weir$SEMFe/Weir$TotalFe),Weir$Effluent,mean)
+```
+
+### 11% more %SEMFe in Birch
+```{r fig.align='center',tidy=TRUE}
+tapply((thomp$SEMFe/thomp$TotalFe),thomp$Location,mean)
+```
+
+### SEMFe plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((SEMFe/TotalFe)~Depth,data=BE,log="y",ylim=c(0.1,1),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Fe"[SEM]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((SEMFe/TotalFe)~Depth,data=WE,log="y",add=T,at=c(4,5),
+     yaxt="n",las=2,xlab="",ylab="")
+logaxis(-1,0,2)
+
+points(1.25,as.numeric(mean((BR$SEMFe[BR$Depth=="Surface"]/BR$TotalFe[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$SEMFe[BR$Depth=="Deep"]/BR$TotalFe[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$SEMFe[WR$Depth=="Surface"]/WR$TotalFe[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$SEMFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *y-axis not log transformed*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((SEMFe/TotalFe)~Depth,data=BE,ylim=c(0.15,0.4),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Fe"[SEM]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((SEMFe/TotalFe)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.15,0.2,0.25,0.3,0.35,0.4),labels=c(15,20,25,30,35,40),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$SEMFe[BR$Depth=="Surface"]/BR$TotalFe[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$SEMFe[BR$Depth=="Deep"]/BR$TotalFe[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$SEMFe[WR$Depth=="Surface"]/WR$TotalFe[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$SEMFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## AMORPHOUS Fe MODEL
+
+### Location (p <- 0.002), Effluent (p < 0.001), Depth (p < 0.001) and Effluent:Depth (p <- 0.05) significant
+```{r fig.align='center', tidy=TRUE}
+HFemod <- aov((ASCFe/TotalFe)~Location*Effluent*Depth,data=thomp)
+summary(HFemod)
+shapiro.test(resid(HFemod))
+par(mfrow=c(1,2))
+plot(HFemod,which=c(1,2))
+TukeyHSD(HFemod, which <- c("Location","Effluent","Depth","Effluent:Depth"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot((ASCFe/TotalFe)~Depth*Location*Effluent,data=thomp,las=2,cex.axis=0.9)
+```
+
+### 11% on Birch and 9% on Weir,  12% on Ref and 9% on Exp, 12% on Surf and 9% on Deep 
+```{r fig.align='center',tidy=TRUE}
+tapply((thomp$ASCFe/thomp$TotalFe),thomp$Location,mean)
+tapply((thomp$ASCFe/thomp$TotalFe),thomp$Effluent,mean)
+tapply((thomp$ASCFe/thomp$TotalFe),thomp$Depth,mean)
+```
+
+### 15% on Ref Surf and 10% on Ref Deep, 10% on Exp Surf and 8% on Exp Deep
+```{r fig.align='center',tidy=TRUE}
+tapply((thomp[thomp$Effluent=="Reference",]$ASCFe)/(thomp[thomp$Effluent=="Reference",]$TotalFe),
+       thomp[thomp$Effluent=="Reference",]$Depth,mean)
+
+tapply((thomp[thomp$Effluent=="Exposure",]$ASCFe)/(thomp[thomp$Effluent=="Exposure",]$TotalFe),
+       thomp[thomp$Effluent=="Exposure",]$Depth,mean)
+```
+
+### ASCFe plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,1.5))
+
+plot((ASCFe/TotalFe)~Depth,data=BE,log="y",ylim=c(0.01,1),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Fe"[HFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((ASCFe/TotalFe)~Depth,data=WE,log="y",add=T,at=c(4,5),
+     yaxt="n",las=2,xlab="",ylab="")
+logaxis(-2,0,2)
+
+points(1.25,as.numeric(mean((BR$ASCFe[BR$Depth=="Surface"]/BR$TotalFe[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$ASCFe[BR$Depth=="Deep"]/BR$TotalFe[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$ASCFe[WR$Depth=="Surface"]/WR$TotalFe[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$ASCFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *y-axis not log transformed: same as plotting PAmFe~Depth*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+par(pin=c(3,1.5))
+plot((ASCFe/TotalFe)~Depth,data=BE,ylim=c(0,0.2),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Fe"[HFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((ASCFe/TotalFe)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.01,0.05,0.1,0.15,0.2),labels=c(1,5,10,15,20),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$ASCFe[BR$Depth=="Surface"]/BR$TotalFe[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$ASCFe[BR$Depth=="Deep"]/BR$TotalFe[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$ASCFe[WR$Depth=="Surface"]/WR$TotalFe[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$ASCFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## CRYSTALLINE Fe MODEL
+
+### Location:Depth (p <- 0.006) significant
+```{r fig.align='center', tidy=TRUE}
+CFemod <- aov((CrysFe/TotalFe)~Location*Effluent*Depth,data=thomp)
+summary(CFemod)
+shapiro.test(resid(CFemod))
+par(mfrow=c(1,2))
+plot(CFemod,which=c(1,2))
+TukeyHSD(CFemod,which = "Location:Depth")
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot((CrysFe/TotalFe)~Depth*Location,data=thomp,las=2)
+```
+
+### 23% (Birch) less %CrysFe in surface than deep sediment;
+```{r fig.align='center',tidy=TRUE}
+tapply((thomp[thomp$Location=="Birchtree",]$CrysFe)/(thomp[thomp$Location=="Birchtree",]$TotalFe),
+       thomp[thomp$Location=="Birchtree",]$Depth,mean)
+```
+
+### CrysFe plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((CrysFe/TotalFe)~Depth,data=BE,log="y",ylim=c(0.1,1),xlim=c(0.25,5.5),
+     xlab="",ylab="Crystalline Fe oxides (%)",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((CrysFe/TotalFe)~Depth,data=WE,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(-1,0,2)
+
+points(1.25,as.numeric(mean((BR$CrysFe[BR$Depth=="Surface"]/BR$TotalFe[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$CrysFe[BR$Depth=="Deep"]/BR$TotalFe[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$CrysFe[WR$Depth=="Surface"]/WR$TotalFe[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$CrysFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *y-axis not log transformed: same as plotting PCrysFe~Depth*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((CrysFe/TotalFe)~Depth,data=BE,ylim=c(0.1,0.4),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Fe"[CFO]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((CrysFe/TotalFe)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.1,0.2,0.3,0.4),labels=c(10,20,30,40),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$CrysFe[BR$Depth=="Surface"]/BR$TotalFe[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$CrysFe[BR$Depth=="Deep"]/BR$TotalFe[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$CrysFe[WR$Depth=="Surface"]/WR$TotalFe[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$CrysFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## *MANGANESE VARIABLES*
+
+## TOTAL Mn MODEL
+
+### Effluent (p <- 0.001) and Depth (p < 0.001)
+```{r fig.align='center', tidy=TRUE}
+TOTMnmod <- aov(log(TotalMn)~Location*Effluent*Depth,data=thomp)
+summary(TOTMnmod)
+shapiro.test(resid(TOTMnmod))
+par(mfrow=c(1,2))
+plot(TOTMnmod,which=c(1,2))
+TukeyHSD(TOTMnmod,which <- c("Effluent","Depth"))
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(TotalMn)~Depth*Effluent,data=thomp,las=2)
+```
+
+### 20% (log) or 19% (non-transformed) reduction in Total Mn from reference to exposure sites (more on ref)
+```{r fig.align='center',tidy=TRUE}
+tapply(log(thomp$TotalMn),thomp$Effluent,mean)
+```
+
+### 27% (log) or 29% (non-transformed) less Mn on deep sediments
+```{r fig.align='center',tidy=TRUE}
+tapply(log(thomp$TotalMn),thomp$Depth,mean)
+```
+
+### Total Mn plots (good graphs)
+
+```{r include=F}
+### Birch surf and deep, exp and ref
+par(pin=c(3,3))
+
+plot(TotalMn~Effluent,data=surf[surf$Location=="Birchtree",],ylim=c(350,1550),xlim=c(0.25,5.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(TotalMn~Effluent,data=deep[deep$Location=="Birchtree",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab=expression(paste("Total Mn (mg kg"^"-1"," ", "dw)")),main="Birch")
+axis(side=2,at=c(500,850,1200,1550),labels=c(500,850,1200,1550),las=3,cex.axis=0.9)
+
+text(1.75,1700,"Surf")
+text(4.5,1700,"Deep")
+```
+
+```{r include=F}
+### Weir surf and deep, exp and ref
+par(pin=c(3,3))
+
+plot(TotalMn~Effluent,data=surf[surf$Location=="Weir",],ylim=c(350,1000),xlim=c(0.25,5.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(TotalMn~Effluent,data=deep[deep$Location=="Weir",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab=expression(paste("Total Mn (mg kg"^"-1"," ", "dw)")),main="Weir")
+axis(side=2,at=c(400,600,800,1000),labels=c(400,600,800,1000),las=3,cex.axis=0.9)
+
+text(1.75,1075,"Surf")
+text(4.5,1075,"Deep")
+```
+
+## SEM Mn MODEL
+
+### Not significant
+```{r fig.align='center', tidy=TRUE}
+thomp$SEMMn[7] = NA # Outlier
+SMnmod <- aov(log(SEMMn/TotalMn)~Location*Effluent*Depth,data=thomp)
+summary(SMnmod)
+shapiro.test(resid(SMnmod))
+par(mfrow=c(1,2))
+plot(SMnmod,which=c(1,2))
+TukeyHSD(SMnmod,which = "Depth")
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(SEMMn/TotalMn)~Depth,data=thomp,las=2)
+```
+
+```{r fig.align='center',tidy=TRUE}
+tapply(log(thomp$SEMMn/thomp$TotalMn),thomp$Depth,mean,na.rm=T)
+```
+
+### *y-axis not log transformed*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((SEMMn/TotalMn)~Depth,data=BE,ylim=c(0.2,1.5),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Mn"[SEM]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((SEMMn/TotalMn)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.2,0.6,1,1.4),labels=c(20,60,100,140),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$SEMMn[BR$Depth=="Surface"]/BR$TotalMn[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$SEMMn[BR$Depth=="Deep"]/BR$TotalMn[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$SEMMn[WR$Depth=="Surface"]/WR$TotalMn[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$SEMMn[WR$Depth=="Deep"]/WR$TotalMn[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+## OXIDIZED Mn MODEL
+
+### Location:Depth (p <- 0.01) significant
+```{r fig.align='center', tidy=TRUE}
+HMnmod <- aov(log(DITMn/TotalMn)~Location*Effluent*Depth,data=thomp)
+summary(HMnmod)
+shapiro.test(resid(HMnmod))
+par(mfrow=c(1,2))
+plot(HMnmod,which=c(1,2))
+TukeyHSD(HMnmod, which = "Location:Depth")
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(DITMn/TotalMn)~Location*Depth,data=thomp,las=2,cex.axis=0.9)
+```
+
+### DITMn plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((DITMn/TotalMn)~Depth,data=BE,log="y",ylim=c(0.1,10),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Mn"[Oxid]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((DITMn/TotalMn)~Depth,data=WE,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(-1,1,2)
+
+points(1.25,as.numeric(mean((BR$DITMn[BR$Depth=="Surface"]/BR$TotalMn[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((BR$DITMn[BR$Depth=="Deep"]/BR$TotalMn[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((WR$DITMn[WR$Depth=="Surface"]/WR$TotalMn[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$DITMn[WR$Depth=="Deep"]/WR$TotalMn[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+### *y-axis not log transformed: same as plotting POxidMn~Depth*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((DITMn/TotalMn)~Depth,data=BE,ylim=c(0.2,1.5),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Mn"[Oxid]*" (%)")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((DITMn/TotalMn)~Depth,data=WE,add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0.2,0.6,1,1.4),labels=c(20,60,100,140),cex.axis=0.9)
+
+points(1.25,as.numeric(mean((BR$DITMn[BR$Depth=="Surface"]/BR$TotalMn[BR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref surface average
+points(2.25,as.numeric(mean((BR$DITMn[BR$Depth=="Deep"]/BR$TotalMn[BR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # BR Ref deep average
+points(4,as.numeric(mean((WR$DITMn[WR$Depth=="Surface"]/WR$TotalMn[WR$Depth=="Surface"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((WR$DITMn[WR$Depth=="Deep"]/WR$TotalMn[WR$Depth=="Deep"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+```
+
+# Water chemistry models and plots
+
+## CONDUCTIVITY
+
+### AvgNi (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+Condmod <- aov(log(Cond)~log(AvgNi)+Location,data=water)
+summary(Condmod)
+shapiro.test(resid(Condmod))
+par(mfrow=c(1,2))
+plot(Condmod,which=c(1,2))
+Condtukey <- aov(log(Cond)~Effluent,data=water)
+TukeyHSD(Condtukey)
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(Cond)~Effluent,data=water,las=2,cex.axis=0.9)
+```
+
+```{r fig.align='center', tidy=TRUE}
+summary(lm(log(Cond)~log(AvgNi),data=water))
+par(pin=c(3,3))
+
+plot(log(Cond)~log(AvgNi),data=Weir,xlim=c(3.5,6.25),ylim=c(4.75,9),xlab="",ylab="",
+     pch=16,lwd=3,col="dodgerblue4",xaxt="n",yaxt="n")
+
+points(log(Cond)~log(AvgNi),data=Birch,pch=1,lwd=3,col="tan1")
+axis(1,labels=FALSE,tick <- TRUE)
+axis(2,labels=FALSE,tick <- TRUE)
+
+title(ylab="Conductivity",xlab="Total Ni",line=1.5)
+abline(lm(log(Cond)~log(AvgNi),data=water),lty=3,lwd=3,col="red")
+par(xpd=T)
+
+legend(6.35,9.25,"Weir",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(6.35,8.85,"Birchtree",pch=1,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+```
+
+### 80% (Birch) and 84% (Weir) lower conductivity in reference than exposure sites
+```{r fig.align='center',tidy=TRUE}
+tapply(log(water[water$Location=="Birchtree",]$Cond),water[water$Location=="Birchtree",]$Effluent,mean)
+tapply(log(water[water$Location=="Weir",]$Cond),water[water$Location=="Weir",]$Effluent,mean)
+```
+
+### Cond plots
+
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((Cond)~Effluent,data=water,log="y",ylim=c(100,10000),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Conductivity (µS cm"^"-1",")")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((Cond)~Effluent,data=water,log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+logaxis(2,4,2)
+
+points(1.25,as.numeric(mean((1/water$Cond[water$Effluent=="Reference"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref surface average
+points(2.25,as.numeric(mean((1/water$Cond[water$Effluent=="Exposure"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Birch Ref deep average
+points(4,as.numeric(mean((1/water$Cond[water$Effluent=="Reference"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref surface average
+points(5,as.numeric(mean((1/water$Cond[water$Effluent=="Exposure"]))),
+       pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
+
+### *y-axis not log transformed*
+par(pin=c(3,3))
+
+plot((Cond)~Effluent,data=water[water$Location=="Birchtree",],ylim=c(100,8000),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Conductivity (µS cm"^"-1",")")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((Cond)~Effluent,data=water[water$Location=="Weir",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(100,2000,4000,6000,8000),labels=c(100,2000,4000,6000,8000),cex.axis=0.9)
+```
+
+## pH
+
+### AvgNi (p <- 0.002) significant
+```{r fig.align='center', tidy=TRUE}
+pHmod <- aov(pH~AvgNi*Location,data=water)
+summary(pHmod)
+shapiro.test(resid(pHmod))
+par(mfrow=c(1,2))
+plot(pHmod,which=c(1,2))
+pHtukey <- aov(pH~Effluent,data=water)
+TukeyHSD(pHtukey)
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(pH~Effluent,data=water,las=2,cex.axis=0.9)
+```
+
+```{r fig.align='center', tidy=TRUE}
+summary(lm(pH~AvgNi,data=water))
+par(pin=c(3,3))
+plot(pH~AvgNi,data=Weir,ylim=c(7.85,8.7),xlab="Total Ni",ylab="pH",pch=16,lwd=3,col="dodgerblue4")
+points(pH~AvgNi,data=Birch,pch=1,lwd=3,col="tan1")
+abline(lm(pH~AvgNi,data=water),lty=3,lwd=3,col="red")
+par(xpd=T)
+legend(460,8.78,"Weir",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(460,8.71,"Birchtree",pch=1,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+```
+
+### 5% (Birch) and 4% (Weir) lower pH in reference than exposure sites
+```{r fig.align='center',tidy=TRUE}
+tapply(water[water$Location=="Birchtree",]$pH,water[water$Location=="Birchtree",]$Effluent,mean)
+tapply(water[water$Location=="Weir",]$pH,water[water$Location=="Weir",]$Effluent,mean)
+```
+
+### pH plots
+
+```{r include=F}
+### *y-axis not log transformed*
+par(pin=c(3,3))
+
+plot((pH)~Effluent,data=water[water$Location=="Birchtree",],ylim=c(7.8,8.8),xlim=c(0.25,5.5),
+     xlab="",ylab="pH",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((pH)~Effluent,data=water[water$Location=="Weir",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+axis(side=2,at=c(7.8,8,8.2,8.4,8.6,8.8),labels=c(7.8,8,8.2,8.4,8.6,8.8),cex.axis=0.9)
+```
+
+## SULFATE
+
+### AvgNi (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+SO4mod <- aov(log(SO4)~log(AvgNi)*Location,data=water)
+summary(SO4mod)
+shapiro.test(resid(SO4mod))
+par(mfrow=c(1,2))
+plot(SO4mod,which=c(1,2))
+SO4tukey <- aov(log(SO4)~Effluent,data=water)
+TukeyHSD(SO4tukey)
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(SO4)~Effluent,data=water,las=2,cex.axis=0.9)
+```
+
+```{r fig.align='center', tidy=TRUE}
+summary(lm(log(SO4)~log(AvgNi),data=water))
+par(pin=c(3,3))
+
+plot(log(SO4)~log(AvgNi),data=Weir,xlim=c(3.75,6.1),ylim=c(0,9.5),xlab="",ylab="",
+     pch=16,lwd=3,col="dodgerblue4",xaxt="n",yaxt="n")
+points(log(SO4)~log(AvgNi),data=Birch,pch=1,lwd=3,col="tan1")
+
+axis(1,labels=FALSE,tick <- TRUE)
+axis(2,labels=FALSE,tick <- TRUE)
+
+title(ylab="Sulfate",xlab="Total Ni",line=1.5)
+abline(lm(log(SO4)~log(AvgNi),data=water),lty=3,lwd=3,col="red")
+par(xpd=T)
+
+legend(6.2,10.25,"Weir",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(6.2,9.40,"Birchtree",pch=1,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+```
+
+### 99% (Birch) and 100% (Weir) reduction in sulfate from exposure to reference sites
+```{r fig.align='center',tidy=TRUE}
+tapply(log(water[water$Location=="Birchtree",]$SO4),water[water$Location=="Birchtree",]$Effluent,mean)
+tapply(log(water[water$Location=="Weir",]$SO4),water[water$Location=="Weir",]$Effluent,mean)
+```
+
+### SO4 plots
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot(SO4~Effluent,data=water[water$Location=="Birchtree",],log="y",ylim=c(1,100000),xlim=c(0.25,5.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot(SO4~Effluent,data=water[water$Location=="Weir",],log="y",add=T,at=c(4,5),
+     yaxt="n",las=2,xlab="",ylab="")
+title(ylab=expression(paste("Sulfate (mg L"^"-1",")")),line=4)
+
+logaxis(0,5,2)
+
+### *y-axis not log transformed*
+par(pin=c(3,3))
+
+plot((SO4)~Effluent,data=water[water$Location=="Birchtree",],ylim=c(50,14000),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Sulfate (mg L"^"-1",")")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((SO4)~Effluent,data=water[water$Location=="Weir",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+axis(side=2,at=c(2000,6000,10000,14000),labels=c(2000,6000,10000,14000),cex.axis=0.9)
+```
+
+## CHLORIDE
+
+### AvgNi (p < 0.001) significant
+```{r fig.align='center', tidy=TRUE}
+Clmod <- aov(log(Cl)~log(AvgNi)*Location,data=water)
+summary(Clmod)
+shapiro.test(resid(Clmod))
+par(mfrow=c(1,2))
+plot(Clmod,which=c(1,2))
+Cltukey <- aov(log(Cl)~Effluent,data=water)
+TukeyHSD(Cltukey)
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(Cl)~Effluent,data=water,las=2,cex.axis=0.9)
+```
+
+```{r fig.align='center', tidy=TRUE}
+summary(lm(log(Cl)~log(AvgNi),data=water))
+par(pin=c(3,3))
+
+plot(log(Cl)~log(AvgNi),data=Weir,xlim=c(3.75,6.1),ylim=c(0,10.25),xlab="",ylab="",
+     pch=16,lwd=3,col="dodgerblue4",xaxt="n",yaxt="n")
+
+points(log(Cl)~log(AvgNi),data=Birch,pch=1,lwd=3,col="tan1")
+
+axis(1,labels=FALSE,tick <- TRUE)
+axis(2,labels=FALSE,tick <- TRUE)
+
+title(ylab="Chloride",xlab="Total Ni",line=1.5)
+abline(lm(log(Cl)~log(AvgNi),data=water),lty=3,lwd=3,col="red")
+par(xpd=T)
+
+legend(6.2,10.95,"Weir",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(6.2,10.05,"Birchtree",pch=1,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+```
+
+### 99% (Birch) and 99% (Weir) reduction in chloride from exposure to reference sites
+```{r fig.align='center',tidy=TRUE}
+tapply(log(water[water$Location=="Birchtree",]$Cl),water[water$Location=="Birchtree",]$Effluent,mean)
+tapply(log(water[water$Location=="Weir",]$Cl),water[water$Location=="Weir",]$Effluent,mean)
+```
+
+### Cl plots
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((Cl)~Effluent,data=water[water$Location=="Birchtree",],log="y",ylim=c(1,100000),xlim=c(0.25,5.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((Cl)~Effluent,data=water[water$Location=="Weir",],log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab=expression(paste("Chloride (mg L"^"-1",")")),line=4)
+logaxis(0,5,2)
+
+### *y-axis not log transformed*
+par(pin=c(3,3))
+
+plot((Cl)~Effluent,data=water[water$Location=="Birchtree",],ylim=c(50,10000),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Chloride (mg L"^"-1",")")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((Cl)~Effluent,data=water[water$Location=="Weir",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(100,2000,4000,6000,8000,10000),labels=c(100,2000,4000,6000,8000,10000),cex.axis=0.9)
+```
+
+## DISSOLVED NICKEL
+
+### AvgNi (p < 0.001), Location (p < 0.001) and AvgNi:Location (p <- 0.01) significant
+```{r fig.align='center', tidy=TRUE}
+Nimod <- aov(log(Ni)~log(AvgNi)*Location,data=water)
+summary(Nimod)
+shapiro.test(resid(Nimod))
+par(mfrow=c(1,2))
+plot(Nimod,which=c(1,2))
+Nitukey <- aov(log(Ni)~Location*Effluent,data=water)
+TukeyHSD(Nitukey)
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(log(Ni)~Location*Effluent,data=water,las=2,cex.axis=0.9)
+```
+
+```{r fig.align='center', tidy=TRUE}
+summary(lm(log(Ni)~log(AvgNi)*Location,data=water))
+par(pin=c(3,3))
+
+plot(Ni~AvgNi,data=Weir,log="xy",ylim=c(1,200),xlim=c(30,500),
+     xlab="",ylab="",pch=1,lwd=3,xaxt="n",yaxt="n",col="dodgerblue4",cex=1.5)
+
+points(Ni~AvgNi,data=Birch,pch=16,lwd=3,col="tan1",cex=1.5)
+
+logaxis(0,2.1706,2)
+logaxis(1,2.6021,1)
+
+axis(1,at=c("50","200","400"),labels=c("50","200","400"),tick=FALSE)
+axis(2,at=c("200"),labels=c("200"),las=2,tick=FALSE)
+
+title(ylab=expression(paste("Dissolved Ni (µg L"^"-1",")")),xlab=expression(paste("Total Ni (mg kg"^"-1",")")),line=2.5)
+abline(lm(log10(Ni)~log10(AvgNi),data=Birch),lty=3,lwd=3,col="tan1")
+abline(lm(log10(Ni)~log10(AvgNi),data=Weir),lty=1,lwd=3,col="dodgerblue4")
+par(xpd=T)
+
+legend(35,250,"Birch",pch=16,pt.lwd=3,col="tan1",text.font=2,bty="n",lty=3,lwd=3,pt.cex <- 1.5)
+legend(35,150,"Weir",pch=1,pt.lwd=3,col="dodgerblue4",text.font=2,bty="n",lty=1,lwd=3,pt.cex <- 1.5)
+```
+
+### 21% (Reference) and 86% (Exposure) lower dissolved nickel in Birchtree than Weir locations
+```{r fig.align='center',tidy=TRUE}
+tapply(log(water[water$Effluent=="Reference",]$Ni),water[water$Effluent=="Reference",]$Location,mean)
+tapply(log(water[water$Effluent=="Exposure",]$Ni),water[water$Effluent=="Exposure",]$Location,mean)
+```
+
+### 61% (Birch) and 93% (Weir) lower dissolved nickel in reference than exposure sites
+```{r fig.align='center',tidy=TRUE}
+tapply(log(water[water$Location=="Birchtree",]$Ni),water[water$Location=="Birchtree",]$Effluent,mean)
+tapply(log(water[water$Location=="Weir",]$Ni),water[water$Location=="Weir",]$Effluent,mean)
+```
+
+### Ni plots
+```{r include=F}
+### *y-axis log transformed*
+par(pin=c(3,3))
+
+plot((Ni)~Effluent,data=water[water$Location=="Birchtree",],log="y",ylim=c(1,1000),xlim=c(0.25,5.5),
+     xlab="",ylab="",las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((Ni)~Effluent,data=water[water$Location=="Weir",],log="y",add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+
+title(ylab=expression(paste("Dissolved nickel (µg L"^"-1",")")),line=4)
+logaxis(0,3,2)
+```
+
+### *y-axis not log transformed*
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+
+plot((Ni)~Effluent,data=water[water$Location=="Birchtree",],ylim=c(0,180),xlim=c(0.25,5.5),
+     xlab="",ylab=expression(paste("Dissolved nickel (µg L"^"-1",")")),las=3,yaxt="n",at=c(1.25,2.25))
+
+plot((Ni)~Effluent,data=water[water$Location=="Weir",],add=T,at=c(4,5),yaxt="n",las=2,xlab="",ylab="")
+axis(side=2,at=c(0,40,80,120,160),labels=c(0,40,80,120,160),cex.axis=0.9)
+```
+
+-------
+
+```{r include=F}
+## Matrices of surf [1:3,] and deep [4:6,] variables: CrysNi, ASCNi and TotalNi (ordered by conductivity)
+
+### Birch
+BirchNi <- matrix(data=NA,ncol=10,nrow=7)
+BirchNi[c(1,4),] = tapply(BE$CrysNi,list(BE$Depth,BE$Site),mean,na.rm=T)
+BirchNi[c(2,5),] = tapply(BE$ASCNi,list(BE$Depth,BE$Site),mean,na.rm=T)
+BirchNi[c(3,6),] = tapply(BE$TotalNi,list(BE$Depth,BE$Site),mean,na.rm=T)
+BirchNi[3,] = BirchNi[3,]-(BirchNi[2,]+BirchNi[1,])
+BirchNi[6,] = BirchNi[6,]-(BirchNi[4,]+BirchNi[5,])
+BirchNi[7,] = tapply(BE$Cond,BE$Site,mean,na.rm=T)
+BirchNi <- BirchNi[,order(BirchNi[7,])]
+```
+
+### Barplots of Ni
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+par(xpd=T)
+
+# Birch Surface
+barplot(BirchNi[1:3,],las=1,ylab="Sediment Ni (mg/kg)",ylim=c(0,600))
+box()
+legend(-0.5,615,legend=c("Residual",expression(paste("Ni"[HFO]*"")),expression(paste("Ni"[CFO]*""))),
+       fill=c("grey80","grey50","grey30"),bty="n")
+text(1,750,"Birchtree Surface")
+
+# Birch Deep
+barplot(BirchNi[4:6,],las=1,ylab="Sediment Ni (mg/kg)",ylim=c(0,600))
+box()
+legend(-0.5,615,legend=c("Residual",expression(paste("Ni"[HFO]*"")),expression(paste("Ni"[CFO]*""))),
+       fill=c("grey80","grey50","grey30"),bty="n")
+text(1,750,"Birchtree Deep")
+```
+
+```{r include=F}
+### Weir
+WeirNi <- matrix(data=NA,ncol=10,nrow=7)
+WeirNi[c(1,4),] = tapply(WE$CrysNi,list(WE$Depth,WE$Site),mean,na.rm=T)
+WeirNi[c(2,5),] = tapply(WE$ASCNi,list(WE$Depth,WE$Site),mean,na.rm=T)
+WeirNi[c(3,6),] = tapply(WE$TotalNi,list(WE$Depth,WE$Site),mean,na.rm=T)
+WeirNi[3,] = WeirNi[3,]-(WeirNi[2,]+WeirNi[1,])
+WeirNi[6,] = WeirNi[6,]-(WeirNi[4,]+WeirNi[5,])
+WeirNi[7,] = tapply(WE$Cond,WE$Site,mean,na.rm=T)
+WeirNi <- WeirNi[,order(WeirNi[7,])]
+```
+
+### Barplots of Ni
+```{r fig.align='center', tidy=TRUE}
+par(pin=c(3,3))
+par(xpd=T)
+
+# Weir Surface
+barplot(WeirNi[1:3,],las=1,ylab="Sediment Ni (mg/kg)",ylim=c(0,600))
+box()
+legend(-.5,615,legend=c("Residual",expression(paste("Ni"[HFO]*"")),expression(paste("Ni"[CFO]*""))),
+       fill=c("grey80","grey50","grey30"),bty="n")
+text(1,750,"Weir Surface")
+
+# Weir Deep
+barplot(WeirNi[4:6,],las=1,ylab="Sediment Ni (mg/kg)",ylim=c(0,600))
+box()
+legend(-.5,615,legend=c("Residual",expression(paste("Ni"[HFO]*"")),expression(paste("Ni"[CFO]*""))),
+       fill=c("grey80","grey50","grey30"),bty="n")
+text(1,750,"Weir Deep")
+```
+
+-------
+
+```{r include=F}
+Nimean <- tapply(thomp$TotalNi,thomp$Sample.ID,mean)
+BENi <- Nimean[1:10]
+BRNi <- Nimean[11:14]
+WENi <- Nimean[15:24]
+WRNi <- Nimean[25:28]
+
+AqNi <- tapply((thomp$Ni)[1:28],(thomp$Sample.ID)[1:28],mean, is.NA=F)
+BEAqNi <- AqNi[1:10]
+BRAqNi <- AqNi[11:14]
+WEAqNi <- AqNi[15:24]
+WRAqNi <- AqNi[25:28]
+
+Cond <- tapply((thomp$Cond)[1:28],(thomp$Sample.ID)[1:28],mean, is.NA=F)
+BECond <- Cond[1:10]
+BRCond <- Cond[11:14]
+WECond <- Cond[15:24]
+WRCond <- Cond[25:28]
+
+BRSEMAVS <- thomp$SEMAVS[1:4]
+BESEMAVS <- thomp$SEMAVS[5:14]
+WRSEMAVS <- thomp$SEMAVS[15:18]
+WESEMAVS <- thomp$SEMAVS[19:28]
+
+BRSEMAVSOC <- thomp$SEMAVSfOC[1:4]
+BESEMAVSOC <- thomp$SEMAVSfOC[5:14]
+WRSEMAVSOC <- thomp$SEMAVSfOC[15:18]
+WESEMAVSOC <- thomp$SEMAVSfOC[19:28]
+```
+
+par(mfrow=c(1,2)) # Shows 2 graphs (columns) in 1 row
+par(pty="m") # Maximizes use of graph area
+
+```{r fig.align='center',tidy=TRUE}
+par(mfrow=c(1,2))
+par(pin=c(3,3))
+
+# Birchtree Total Ni plot, Exposure
+plot(BENi[order(BENi)],ylim=c(0,500),las=1,ylab="Total Ni (mg/kg)",xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(BRNi[order(BRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(7,410,"Exposure",col="firebrick4")
+text(3.5,15,"Reference",col="forestgreen")
+
+# Weir Total Ni plot, Exposure
+plot(WENi[order(WENi)],ylim=c(0,500),las=1,ylab="",xlab="",col="firebrick4",cex=1.5,lwd=2, pch=1) 
+points(WRNi[order(WRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(6,410,"Exposure",col="firebrick4")
+text(3.25,8,"Reference",col="forestgreen")
+
+# Birchtree Dissolved Ni plot
+plot(BEAqNi[order(BENi)],ylim=c(0,170),las=1,ylab=expression(paste("Dissolved nickel (µg L"^"-1",")")),xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(BRAqNi[order(BRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(7.5,50,"Exposure",col="firebrick4")
+text(2.75,30,"Reference",col="forestgreen")
+
+# Weir Dissolved Ni plot
+plot(WEAqNi[order(WENi)],ylim=c(0,170),las=1,ylab=expression(paste("Dissolved nickel (µg L"^"-1",")")),xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(WRAqNi[order(WRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(7,140,"Exposure",col="firebrick4")
+text(7,6,"Reference",col="forestgreen")
+
+# Birchtree Conductivity plot
+plot(BECond[order(BENi)],ylim=c(0,7500),las=1,ylab="",xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(BRCond[order(BRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+title(ylab=expression(paste("Conductivity (µS cm"^"-1",")")),line=4)
+text(7.25,200,"Exposure",col="firebrick4")
+text(2.5,1000,"Reference",col="forestgreen")
+
+# Weir Conductivity plot
+plot(WECond[order(WENi)],ylim=c(0,7500),las=1,ylab="",xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(WRCond[order(WRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+title(ylab=expression(paste("Conductivity (µS cm"^"-1",")")),line=4)
+text(8,2500,"Exposure",col="firebrick4")
+text(7.25,200,"Reference",col="forestgreen")
+
+# Birchtree SEM-AVS plot
+plot(BESEMAVS[order(BENi)],ylim=c(-3,9.5),las=1,ylab=expression(paste("SEM"[Ni]*"-AVS"," (µmol/g)")),xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(BRSEMAVS[order(BRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(7,5,"Exposure",col="firebrick4")
+text(3,-1,"Reference",col="forestgreen")
+
+# Weir SEM-AVS plot
+plot(WESEMAVS[order(WENi)],ylim=c(-3,9.5),las=1,ylab=expression(paste("SEM"[Ni]*"-AVS"," (µmol/g)")),xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(WRSEMAVS[order(WRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(7,7,"Exposure",col="firebrick4")
+text(4,-1,"Reference",col="forestgreen")
+
+# Birchtree SEM-AVS/fOC plot
+plot(BESEMAVSOC[order(BENi)],ylim=c(-60,190),las=1,ylab=expression(paste("(SEM"[Ni]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(BRSEMAVSOC[order(BRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(8,100,"Exposure",col="firebrick4")
+text(3,-25,"Reference",col="forestgreen")
+
+# Weir SEM-AVS/fOC plot
+plot(WESEMAVSOC[order(WENi)],ylim=c(-60,190),las=1,ylab=expression(paste("(SEM"[Ni]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),xlab="",col="firebrick4",cex=1.5,lwd=2) 
+points(WRSEMAVSOC[order(WRNi)],pch=16,cex=1.5,lwd=2,col="forestgreen") # Reference
+text(7,150,"Exposure",col="firebrick4")
+text(3,-25,"Reference",col="forestgreen")
+```
+
+```{r include=F}
+# Variable correlations
+cor.surf <- cor(surf[6:33],surf[6:33],method="pearson")
+cor.deep <- cor(deep[6:33],deep[6:33],method="pearson")
+```
+
+------
+# Invert relative abundance barplots
+```{r Barplots rel abund, fig.align='center', tidy=TRUE}
+
+## All families rel abund > 10%
+
+relabund <- read.csv("thomp_relabund.csv") #Relative abundances of all families with sum rel abund > 10% (n = 17)
+invert_bar <- as.matrix(relabund[,2:41])
+
+par(pin=c(3,3))
+par(xpd=T)
+colfunc <- colorRampPalette(c("dodgerblue4","aliceblue")) #Creates a color palette between color 1 and color 2
+#colfunc <- colorRampPalette(c("darkcyan","azure3"))
+#colfunc <- colorRampPalette(c("black","white"))
+#colfunc(17)
+
+# Birch Reference
+barplot(invert_bar[,1:10],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(17))
+legend(13,100,legend=relabund[,1],fill=colfunc(17),bty="n",cex=0.8)
+text(1,120,"Birchtree Reference")
+
+# Birch Exposure
+barplot(invert_bar[,11:20],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(17))
+legend(13,100,legend=relabund[,1],fill=colfunc(17),bty="n",cex=0.8)
+text(1,120,"Birchtree Exposure")
+
+# Weir Reference
+barplot(invert_bar[,21:30],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(17))
+legend(13,100,legend=relabund[,1],fill=colfunc(17),bty="n",cex=0.8)
+text(1,120,"Weir Reference")
+
+# Weir Exposure
+barplot(invert_bar[,31:40],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(17))
+legend(13,100,legend=relabund[,1],fill=colfunc(17),bty="n",cex=0.8)
+text(1,120,"Weir Exposure")
+
+
+## Only 10 most abundant families
+
+relabund_b <- read.csv("thomp_relabund_B.csv") #Relative abundances of 10 most abundant families
+invert_bar_b <- as.matrix(relabund_b[,2:41])
+
+par(pin=c(3,3))
+par(xpd=T)
+colfunc <- colorRampPalette(c("dodgerblue4","aliceblue")) #Creates a color palette between color 1 and color 2
+
+# Birch Reference
+barplot(invert_bar_b[,1:10],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(10))
+legend(13,100,legend=relabund_b[,1],fill=colfunc(10),bty="n",cex=0.8)
+text(1,120,"Birchtree Reference")
+
+# Birch Exposure
+barplot(invert_bar_b[,11:20],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(10))
+legend(13,100,legend=relabund_b[,1],fill=colfunc(10),bty="n",cex=0.8)
+text(1,120,"Birchtree Exposure")
+
+# Weir Reference
+barplot(invert_bar_b[,21:30],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(10))
+legend(13,100,legend=relabund_b[,1],fill=colfunc(10),bty="n",cex=0.8)
+text(1,120,"Weir Reference")
+
+# Weir Exposure
+barplot(invert_bar_b[,31:40],las=1,ylab="Relative abundance (%)",ylim=c(0,100),xaxt="n",col=colfunc(10))
+legend(13,100,legend=relabund_b[,1],fill=colfunc(10),bty="n",cex=0.8)
+text(1,120,"Weir Exposure")
+```
+
+# Invert analyses
+```{r Diversity indices, include=F}
+library(vegan)
+(inv_shan <- diversity(benthos[,2:39])) # Shannon diversity
+(inv_simp <- diversity(benthos[,2:39],index="simpson")) # Simpson diversity
+(inv_rich <- specnumber(benthos[,2:39])) # Species richness
+(inv_rich_ef <- specnumber(benthos[,2:39],groups=allrefs$Effluent)) # Species richness by Effluent
+(inv_even <- inv_shan/log(inv_rich)) # Pielou's evenness
+
+alpha <- with(allrefs, tapply(specnumber(benthos[,2:39]), Effluent, mean)) # Alpha diversity
+gamma <- with(allrefs, specnumber(benthos[,2:39], Effluent)) # Gamma diversity
+gamma/alpha - 1 # Beta diversity
+
+summary(aov(inv_shan~allrefs$Effluent)) # p <- 0.0582
+summary(aov(inv_simp~allrefs$Effluent)) # p <- 0.095
+summary(aov(inv_rich~allrefs$Effluent)) # No significant relationship 
+summary(aov(inv_even~allrefs$Effluent)) # No significant relationship 
+
+summary(lm(inv_shan~allrefs$TotalNi.surf)) # No significant relationship
+summary(lm(inv_shan~allrefs$ASCFe.surf)) # p <- 0.04418
+```
+
+```{r Graphing codes}
+# All sites
+Sample=as.vector(allrefs$Sample)
+BRef=grepl("BR.*",Sample)
+BExp=grepl("BE.*",Sample)
+WRef=grepl("WR.*",Sample)
+WExp=grepl("WE.*",Sample)
+
+color.sample=ifelse(BRef==T,"tan1",
+                    ifelse(WRef==T,"dodgerblue4",
+                           ifelse(BExp==T,"tan1",
+                                  ifelse(WExp==T,"dodgerblue4",1))))
+ps=ifelse(BRef==T,17,
+          ifelse(WRef==T,16,
+                 ifelse(BExp==T,2,
+                        ifelse(WExp==T,1,13))))
+
+# Expososure only
+Sample.exp=as.vector(thomp.exp$Sample)
+BE.exp=grepl("B.*",Sample.exp)
+WE.exp=grepl("W.*",Sample.exp)
+
+color.exp=ifelse(BE.exp==T,"tan1",
+                                  ifelse(WE.exp==T,"dodgerblue4",1))
+ps.exp=ifelse(BE.exp==T,16,
+                    ifelse(WE.exp==T,1,13))
+```
+
+# EPHEMERIDAE
+
+## Reference + Exposure sites 
+```{r All sites [Ni]_SURF, fig.align='center',tidy=TRUE}
+summary(lm(REL_EPH~log(TotalNi.surf), data=chem.inv))
+shapiro.test(resid((lm(REL_EPH~log(TotalNi.surf), data=chem.inv))))
+
+par(pin=c(3,3))
+plot(REL_EPH~TotalNi.surf,data=chem.inv,log="x",pch=ps,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(25,1000),col=color.sample,
+     ylab="Ephemeridae abundance (%)",xaxt="n",
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")))
+logaxis(1,3,1)
+axis(1,at=c("50","100","250"),labels=c("50","100","250"),las=1,tick=FALSE)
+
+abline(lm(REL_EPH[1:20]~log10(TotalNi.surf[1:20]),data=chem.inv),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[21:40]~log10(TotalNi.surf[21:40]), data=chem.inv),lty=1,lwd=3,col="dodgerblue4")
+```
+
+```{r All sites Fe-corrected Ni, fig.align='center',tidy=TRUE}
+summary(lm(REL_EPH~log(Ni.Fe),data=chem.inv))
+shapiro.test(resid((lm(REL_EPH~log(Ni.Fe),data=chem.inv))))
+
+par(pin=c(3,3))
+plot(REL_EPH~Ni.Fe, data=chem.inv, log="x",pch=ps,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(25,1000),col=color.sample,
+     ylab="Ephemeridae abundance (%)",xaxt="n",
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")))
+logaxis(1,3,1)
+axis(1,at=c("50","100","250"),labels=c("50","100","250"),las=1,tick=FALSE)
+
+abline(lm(REL_EPH[1:20]~log10(Ni.Fe[1:20]),data=chem.inv),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[21:40]~log10(Ni.Fe[21:40]),data=chem.inv),lty=1,lwd=3,col="dodgerblue4")
+
+# legend(250,50,"Birch",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5)
+# legend(250,45,"Weir",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5)
+```
+
+```{r All sites SEMNi-AVS, fig.align='center',tidy=TRUE}
+summary(lm(REL_EPH~log(SEMAVSfOC.surf), data=chem.inv))
+shapiro.test(resid((lm(REL_EPH~log(SEMAVSfOC.surf), data=chem.inv))))
+
+par(pin=c(3,3))
+plot(REL_EPH~SEMAVSfOC.surf, data=chem.inv, log="x",pch=ps,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(1,1000),col=color.sample,
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(0,3,1)
+
+abline(lm(REL_EPH[1:20]~log10(SEMAVSfOC.surf[1:20]), data=chem.inv),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[21:40]~log10(SEMAVSfOC.surf[21:40]), data=chem.inv),lty=1,lwd=3,col="dodgerblue4")
+
+par(xpd=T)
+legend(1500,53,"Birch",col="tan1",lty=3,lwd=3,bty="n",text.font <- 2)
+legend(1500,48,"Weir",col="dodgerblue4",lty=1,lwd=3,bty="n",text.font <- 2)
+
+legend(1300,54,"Birch Reference",pch=17,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+legend(1300,50,"Birch Exposure",pch=2,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+legend(1300,46,"Weir Reference",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(1300,42,"Weir Exposure",pch=1,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+```
+
+## Exposure sites *only*
+
+```{r [Ni]_SURF, fig.align='center',tidy=TRUE}
+par(pin=c(1.5,3))
+plot(REL_EPH~TotalNi.surf, data=chem.inv.exp,log="x",pch=ps.exp,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(10,1000),col=color.exp,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(1,3,1)
+#axis(1,at=c("250","500"),labels=c("250","500"),las=1,tick=FALSE)
+
+abline(lm(REL_EPH[1:10]~log10(TotalNi.surf[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(TotalNi.surf[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+par(xpd=T)
+legend(14000,52,"Birchtree",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5,cex=0.9)
+legend(14000,48.5,"Thompson",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5,cex=0.9)
+par(xpd=F)
+
+plot(REL_EPH~log(TotalNi.surf), data=chem.inv.exp,col=as.numeric(as.factor(Location)))
+TNmod <- lm(REL_EPH~log(TotalNi.surf)*Location, data=chem.inv.exp)
+summary.aov(TNmod)
+
+TNW <- lm(REL_EPH~log(TotalNi.surf),data=chem.inv.exp[11:20,])
+summary(TNW)
+abline(TNW,col=2)
+exp(((REL_EPH.exp*.9)-TNW$coef[1])/TNW$coef[2])
+  #Weir EC10 <- 236 mg/kg TotalNi.surf for REL_EPH.avg[2]
+  #Weir EC10 <- 121 mg/kg TotalNi.surf for REL_EPH.exp
+  #Weir EC20 <- 263 mg/kg TotalNi.surf for REL_EPH.avg[2]
+  #Weir EC20 <- 145 mg/kg TotalNi.surf for REL_EPH.exp
+  #Weir EC10 <- 54 mg/kg TotalNi.surf for REL_EPH.exp(43)
+  #Weir EC20 <- 71 mg/kg TotalNi.surf for REL_EPH.exp(43)
+
+TNB <- lm(REL_EPH[1:10]~log(TotalNi.surf),data=chem.inv.exp[1:10,])
+summary(TNB)
+abline(TNB)
+exp(((REL_EPH.exp*.9)-TNB$coef[1])/TNB$coef[2])
+  #Birchtree EC10 <- 174 mg/kg TotalNi.surf for REL_EPH.avg[2]
+  #Birchtree EC10 <- 103 mg/kg TotalNi.surf for REL_EPH.exp
+  #Birchtree EC20 <- 190 mg/kg TotalNi.surf for REL_EPH.avg[2]
+  #Birchtree EC20 <- 119 mg/kg TotalNi.surf for REL_EPH.exp
+  #Birchtree EC10 <- 55 mg/kg TotalNi.surf for REL_EPH.exp(43)
+  #Birchtree EC20 <- 68 mg/kg TotalNi.surf for REL_EPH.exp(43)
+
+abs(236-174)/mean(c(236,174)) #RD.avg <- 30%
+abs(121-103)/mean(c(121,103)) #RD.exp <- 16%
+abs(263-190)/mean(c(263,190)) #RD.EC20.avg <- 32%
+abs(145-119)/mean(c(145,119)) #RD.EC20.exp <- 20%
+abs(54-55)/mean(c(54,55)) #RD.exp(43) <- 2%
+abs(71-68)/mean(c(71,68)) #RD.EC20.exp(43) <- 4%
+
+```
+
+```{r SEMNi, fig.align='center',tidy=TRUE}
+par(pin=c(1.5,3))
+plot(REL_EPH~SEMNi.surf, data=chem.inv.exp,log="x",pch=ps.exp,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50), xlim=c(10,1000),col=color.exp,
+     xlab=expression(paste("Ni"[SEM]*" (mg kg"^"-1",")")),ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(1,3,1)
+#axis(1,at=c("250","500"),labels=c("250","500"),las=1,tick=FALSE)
+
+abline(lm(REL_EPH[1:10]~log10(SEMNi.surf[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(SEMNi.surf[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+par(xpd=T)
+legend(1500,52,"Birchtree",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5,cex=0.9)
+legend(1500,48.5,"Thompson",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5,cex=0.9)
+par(xpd=F)
+
+plot(REL_EPH~log(SEMNi.surf), data=chem.inv.exp,col=as.numeric(as.factor(Location)))
+SNmod <- lm(REL_EPH~log(SEMNi.surf)*Location, data=chem.inv.exp)
+summary(SNmod)
+
+SNW <- lm(REL_EPH~log(SEMNi.surf),data=chem.inv.exp[11:20,])
+summary(SNW)
+abline(SNW,col=2)
+exp(((REL_EPH.exp*.9)-SNW$coef[1])/SNW$coef[2])
+  #Weir EC10 <- 236 mg/kg SEMNi.surf for REL_EPH.avg[2]
+  #Weir EC10 <- 121 mg/kg SEMNi.surf for REL_EPH.exp
+  #Weir EC20 <- 263 mg/kg SEMNi.surf for REL_EPH.avg[2]
+  #Weir EC20 <- 145 mg/kg SEMNi.surf for REL_EPH.exp
+  #Weir EC10 <- 33 mg/kg SEMNi.surf for REL_EPH.exp(43)
+  #Weir EC20 <- 46 mg/kg SEMNi.surf for REL_EPH.exp(43)
+
+SNB <- lm(REL_EPH[1:10]~log(SEMNi.surf),data=chem.inv.exp[1:10,])
+summary(SNB)
+abline(SNB)
+exp(((REL_EPH.exp*.9)-SNB$coef[1])/SNB$coef[2])
+  #Birchtree EC10 <- 174 mg/kg SEMNi.surf for REL_EPH.avg[2]
+  #Birchtree EC10 <- 103 mg/kg SEMNi.surf for REL_EPH.exp
+  #Birchtree EC20 <- 190 mg/kg SEMNi.surf for REL_EPH.avg[2]
+  #Birchtree EC20 <- 119 mg/kg SEMNi.surf for REL_EPH.exp
+  #Birchtree EC10 <- 30 mg/kg SEMNi.surf for REL_EPH.exp(43)
+  #Bircthree EC20 <- 38 mg/kg SEMNi.surf for REL_EPH.exp(43)
+
+abs(236-174)/mean(c(236,174)) #RD.avg <- 30%
+abs(121-103)/mean(c(121,103)) #RD.exp <- 16%
+abs(263-190)/mean(c(263,190)) #RD.EC20.avg <- 32%
+abs(145-119)/mean(c(145,119)) #RD.EC20.exp <- 20%
+abs(33-30)/mean(c(33,30)) #RD.exp(43) <- 10%
+abs(46-38)/mean(c(46,38)) #RD.EC20.exp(43) <- 19%
+
+```
+
+```{r [Ni] SURF corrected for Fe, fig.align='center',tidy=TRUE}
+par(pin=c(1.5,3))
+plot(REL_EPH~Ni.Fe, data=chem.inv.exp,pch=ps.exp,log="x",lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(25,1000),col=color.exp,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(1,3,1)
+
+axis(1,at=c("30","300"),labels <- c("30","300"), las=1,tick=FALSE)
+#axis(1,at="400",labels = "400", las=1,tick=FALSE)
+
+abline(lm(REL_EPH[1:10]~log10(Ni.Fe[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(Ni.Fe[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+plot(REL_EPH~log(Ni.Fe), data=chem.inv.exp,col=as.numeric(as.factor(Location)))
+NiFemod <- lm(REL_EPH~log(Ni.Fe)*Location, data=chem.inv.exp)
+summary.aov(NiFemod)
+
+NiFeW <- lm(REL_EPH~log(Ni.Fe),data=chem.inv.exp[11:20,])
+summary(NiFeW)
+abline(NiFeW,col=2)
+exp(((REL_EPH.exp*.9)-NiFeW$coef[1])/NiFeW$coef[2])
+  #Weir EC10 <- 140 mg/kg Ni.Fe for REL_EPH.avg[2]
+  #Weir EC10 <- 69 mg/kg Ni.Fe for REL_EPH.exp
+  #Weir EC10 <- 30 mg/kg Ni.Fe for REL_EPH.exp(43)
+  #Weir EC20 <- 40 mg/kg Ni.Fe for REL_EPH.exp(43)
+
+NiFeB <- lm(REL_EPH[1:10]~log(Ni.Fe),data=chem.inv.exp[1:10,])
+summary(NiFeB)
+abline(NiFeB)
+exp(((REL_EPH.exp*.9)-NiFeB$coef[1])/NiFeB$coef[2])
+  #Birchtree EC10 <- 125 mg/kg Ni.Fe for REL_EPH.avg[2]
+  #Birchtree EC10 <- 64 mg/kg Ni.Fe for REL_EPH.exp
+  #Birchtree EC10 <- 30 mg/kg Ni.Fe for REL_EPH.exp(43)
+  #Birchtree EC20 <- 39 mg/kg Ni.Fe for REL_EPH.exp(43)
+
+abs(140-125)/mean(c(140,125)) #RD.avg <- 11%
+abs(69-65)/mean(c(69,65)) #RD.exp <- 06%
+abs(30-30)/mean(c(30,30)) #RD.exp(43) <- 0%
+abs(40-39)/mean(c(40,39)) #RD.EC20.exp(43) <- 03%
+```
+
+```{r SEM-AVS/ƒOC with avg OC, fig.align='center',tidy=TRUE}
+par(pin=c(1.5,3))
+plot(REL_EPH~SEMAVSfOC.avg, data=chem.inv.exp[c(1,3:11,13:20),],log="x",pch=c(rep(16,times=9),rep(1,times=9)),lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(5,1000),col=c(rep("tan1",times=9),rep("dodgerblue4",times=9)),
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),
+     ylab="",yaxt="n", xaxt="n") #Can use ps.exp and color.exp for pch and col, respectively, if graphing the whole dataset
+logaxis(1,3,1)
+axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
+points(7.130744,14,pch=3,lwd=3,col="tan1") #Birchtree data point that was negative before conversion to min value (BE2)
+points(7.130744,3,pch=3,lwd=3,col="dodgerblue4") #Weir data point that was negative before conversion to min value (WE2)
+
+#axis(1,at=c("25","50","200"),labels <- c("25","50","200"), las=1,tick=FALSE)
+
+abline(lm(REL_EPH[1:10]~log10(SEMAVSfOC.avg[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(SEMAVSfOC.avg[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+summary(lm(REL_EPH~log(SEMAVSfOC.avg), data=chem.inv.exp))
+
+plot(REL_EPH~log(SEMAVSfOC.avg), data=chem.inv.exp,col=as.numeric(as.factor(Location)))
+AVSOCmod <- lm(REL_EPH~log(SEMAVSfOC.avg)*Location, data=chem.inv.exp)
+summary.aov(AVSOCmod)
+
+AVSOCW <- lm(REL_EPH~log(SEMAVSfOC.avg),data=chem.inv.exp[11:20,])
+summary(AVSOCW)
+abline(AVSOCW,col=2)
+exp(((REL_EPH.exp*.9)-AVSOCW$coef[1])/AVSOCW$coef[2])
+  #Weir EC10 <- 51 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.avg[2]
+  #Weir EC10 <- 3.5 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp
+  #Weir EC10 <- 0.1 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+  #Weir EC20 <- 0.4 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+
+AVSOCB <- lm(REL_EPH[1:10]~log(SEMAVSfOC.avg),data=chem.inv.exp[1:10,])
+summary(AVSOCB)
+abline(AVSOCB)
+exp(((REL_EPH.exp*.9)-AVSOCB$coef[1])/AVSOCB$coef[2])
+  #Birchtree EC10 <- 25 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.avg[2]
+  #Birchtree EC10 <- 10 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp
+  #Birchtree EC10 <- 3 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+  #Birchtree EC20 <- 5 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+
+abs(51-25)/mean(c(51,25)) #RD.avg <- 68%
+abs(3.5-10)/mean(c(3.5,10)) #RD.exp <- 96%
+abs(0.1-3)/mean(c(0.1,3)) #RD.exp(43) <- 187%
+abs(0.4-5)/mean(c(0.4,5)) #RD.EC20.exp(43) <- 170%
+
+legend(130,54,"Birch Reference",pch=17,pt.lwd=3,col="forestgreen",text.col="forestgreen",bty="n")
+legend(130,50,"Weir Reference",pch=16,pt.lwd=3,col="forestgreen",text.col="forestgreen",bty="n")
+legend(130,46,"Birch Exposure",pch=2,pt.lwd=3,col="firebrick4",text.col="firebrick4",bty="n")
+legend(130,42,"Weir Exposure",pch=1,pt.lwd=3,col="firebrick4",text.col="firebrick4",bty="n")
+```
+
+```{r Additional EPH regressions}
+par(pin=c(1.5,3))
+
+# NiSEM-NiHFO
+plot(REL_EPH~NiSEMHFO, data=chem.inv.exp,pch=ps.exp,log="x",lwd=3,las=1,cex=1.5,
+     col=color.exp, xlim=c(1,250), ylim=c(0,50),
+     xlab=expression(paste("Ni"[SEM]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(0,2,1)
+
+abline(lm(REL_EPH[1:10]~log10(NiSEMHFO[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(NiSEMHFO[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+#NiSEM-NiDIT // Several negative numbers
+plot(REL_EPH~NiSEMDIT, data=chem.inv.exp,pch=ps.exp,log="x",lwd=3,las=1,cex=1.5,
+     col=color.exp, xlim=c(0.1,250),ylim=c(0,50),
+     xlab=expression(paste("Ni"[SEM]*" - Ni"[Oxid]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(0,2,1)
+
+abline(lm(REL_EPH[1:10]~log10(NiSEMHFO[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(NiSEMHFO[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+# NiSEM-NiHFO/fOC
+plot(REL_EPH~NiSEMHFOfOC, data=chem.inv.exp,pch=ps.exp,log="x",lwd=3,las=1,cex=1.5,
+     col=color.exp, xlim=c(100,10000), ylim=c(0,50),
+     xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (mg kg"^"-1",")")),
+     ylab="",yaxt="n",xaxt="n")
+axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
+logaxis(2,4,1)
+
+abline(lm(REL_EPH[1:10]~log10(NiSEMHFOfOC[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(NiSEMHFOfOC[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+plot(REL_EPH~log(NiSEMHFOfOC), data=chem.inv.exp,col=as.numeric(as.factor(Location)))
+TNmod <- lm(REL_EPH~log(NiSEMHFOfOC)*Location, data=chem.inv.exp)
+summary.aov(TNmod)
+
+TNW <- lm(REL_EPH~log(NiSEMHFOfOC),data=chem.inv.exp[11:20,])
+summary(TNW)
+abline(TNW,col=2)
+exp(((REL_EPH.exp*.9)-TNW$coef[1])/TNW$coef[2])
+  #Weir EC10 <- 1930 mg/kg NiSEM-HFO/fOC for REL_EPH.avg[2]
+  #Weir EC10 <- 765 mg/kg NiSEM-HFO/fOC for REL_EPH.exp
+  #Weir EC20 <- 2245 mg/kg NiSEM-HFO/fOC for REL_EPH.avg[2]
+  #Weir EC20 <- 986 mg/kg NiSEM-HFO/fOC for REL_EPH.exp
+  #Weir EC10 <- 254 mg/kg NiSEM-HFO/fOC for REL_EPH.exp(43)
+  #Weir EC20 <- 370 mg/kg NiSEM-HFO/fOC for REL_EPH.exp(43)
+
+TNB <- lm(REL_EPH[1:10]~log(NiSEMHFOfOC),data=chem.inv.exp[1:10,])
+summary(TNB)
+abline(TNB)
+exp(((REL_EPH.exp*.8)-TNB$coef[1])/TNB$coef[2])
+  #Birchtree EC10 <- 1219 mg/kg NiSEM-HFO/fOC for REL_EPH.avg[2]
+  #Birchtree EC10 <- 537 mg/kg NiSEM-HFO/fOC for REL_EPH.exp
+  #Birchtree EC20 <- 1394 mg/kg NiSEM-HFO/fOC for REL_EPH.avg[2]
+  #Birchtree EC20 <- 672 mg/kg NiSEM-HFO/fOC for REL_EPH.exp
+  #Birchtree EC10 <- 202 mg/kg NiSEM-HFO/fOC for REL_EPH.exp(43)
+  #Birchtree EC20 <- 282 mg/kg NiSEM-HFO/fOC for REL_EPH.exp(43)
+
+abs(1930-1219)/mean(c(1930,1219)) #RD.avg <- 45%
+abs(765-537)/mean(c(765,537)) #RD.exp <- 35%
+abs(2245-1394)/mean(c(2245,1394)) #RD.EC20.avg <- 47%
+abs(986-672)/mean(c(986,672)) #RD.EC20.exp <- 38%
+abs(254-202)/mean(c(254,202)) #RD.exp(43) <- 23%
+abs(370-282)/mean(c(370,282)) #RD.EC20.exp(43) <- 27%
+
+# NiSEM-AVS
+plot(REL_EPH~SEMAVS.surf,data=chem.inv.exp,log="x",pch=ps.exp,lwd=3,las=1,cex=1.5,
+     xlim=c(0.1,10),ylim=c(0,50),col=color.exp,
+     xlab=expression(paste("Ni"[SEM]*" - AVS (µmol g"^"-1",")")),
+     ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(-1,1,1)
+
+abline(lm(REL_EPH[1:10]~log10(SEMAVS.surf[1:10]),data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(SEMAVS.surf[11:20]),data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+```
+
+# TALITRIDAE
+
+```{r Tal Dissolved nickel, fig.align='center',tidy=TRUE}
+Tal.rel.abund=((benthos$TAL/rowSums(benthos[2:39]))*100)
+Tal.rel.abund.exp=((benthos.exp$TAL/rowSums(benthos.exp[2:39]))*100)
+
+summary(lm(Tal.rel.abund~allrefs$Ni))
+
+par(pin=c(3,3))
+plot(Tal.rel.abund~allrefs$Ni,pch=ps,lwd=3,las=1,cex=1.5,
+     ylim=c(0,60),col=color.sample,xlab=expression(paste("Dissolved nickel (µg L"^"-1",")")),ylab="Talitridae abundance (%)")
+```
+
+## Reference + Exposure sites
+
+```{r Ref + Exp Tal [Ni] SURF, fig.align='center',tidy=TRUE}
+# Total sediment nickel: p <- 0.586
+summary(lm(Tal.rel.abund~log(allrefs$TotalNi.surf)))
+shapiro.test(resid(lm(Tal.rel.abund~log(allrefs$TotalNi.surf)))) # Really low p-value for shapiro-wilk test
+
+par(pin=c(3,3))
+plot(Tal.rel.abund~allrefs$TotalNi.surf,pch=ps,log="x",lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),col=color.sample,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Talitridae abundance (%)")
+```
+
+```{r Tal Fe-corrected nickel, fig.align='center',tidy=TRUE}
+# Fe-corrected nickel: p <- 0.9782
+summary(lm(Tal.rel.abund~allrefs$Ni.Fe))
+shapiro.test(resid(lm(Tal.rel.abund~log(allrefs$Ni.Fe))))
+
+par(pin=c(3,3))
+plot(Tal.rel.abund~allrefs$Ni.Fe,pch=ps,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Talitridae abundance (%)")
+```
+
+```{r Tal [Ni] SURF Exp only, fig.align='center',tidy=TRUE}
+TalNi <- lm(Tal.rel.abund.exp~log(thomp.exp$TotalNi.surf))
+shapiro.test(resid(TalNi))
+summary(TalNi)
+
+par(pin=c(3,3))
+plot(Tal.rel.abund.exp~thomp.exp$TotalNi.surf,log="x",col=color.exp,
+     pch=ps.exp,lwd=3,las=1,cex=1.5,ylim=c(0,50),xlim=c(50,1000),
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Talitridae abundance (%)",xaxt="n")
+logaxis(1,3,1)
+axis(1,at=c("250","500"),labels=c("250","500"),las=2,tick=FALSE)
+
+legend(250,50,"Birch",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5)
+legend(250,45,"Weir",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5)
+```
+
+```{r Tal Fe-corrected nickel Exp only, fig.align='center',tidy=TRUE}
+TalNiCor <- lm(Tal.rel.abund.exp~log(thomp.exp$Ni.Fe))
+shapiro.test(resid(TalNiCor))
+summary(TalNiCor)
+
+par(pin=c(3,3))
+plot(Tal.rel.abund.exp~thomp.exp$Ni.Fe,pch=ps.exp,log="x",lwd=3,las=1,cex=1.5,ylim=c(0,50),xlim=c(10,1000),col=color.exp,xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="",xaxt="n")
+logaxis(1,3,1)
+```
+
+```{r Tal SEM-AVS/ƒOC Exp only, fig.align='center',tidy=TRUE}
+TalAVS <- lm(Tal.rel.abund.exp~log(thomp.exp$SEMAVSfOC.surf))
+shapiro.test(resid(TalAVS))
+summary(TalAVS)
+
+par(pin=c(3,3))
+plot(Tal.rel.abund.exp~thomp.exp$SEMAVSfOC.surf,log="x",pch=ps.exp,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(10,200),col=color.exp,
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),ylab="",xaxt="n")
+logaxis(1,3,1)
+axis(1,at=c("25","50","200"),labels <- c("25","50","200"), las=1,tick=FALSE)
+```
+
+# CHIRONOMIDAE
+
+```{r Chi graphs, include=F}
+Chi.rel.abund=((benthos$CHI/rowSums(benthos[2:39]))*100)
+
+# [Ni] SURF: Chironiomidae
+par(pin=c(3,3))
+plot(Chi.rel.abund~allrefs$TotalNi.surf,pch=ps,lwd=3,las=1,cex=1.5,ylim=c(0,100),col=color.sample,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Chironomidae abundance (%)")
+
+# [Fe] HFO: Chironomidae
+par(pin=c(3,3))
+plot(Chi.rel.abund~allrefs$PAmFe.surf,pch=ps,lwd=3,las=1,cex=1.5,ylim=c(0,100),col=color.sample,xlab=expression(paste("Fe"[HFO]*" (%)")),ylab="Chironomidae abundance (%)")
+```
+
+# CAENIDAE
+
+```{r Cae regressions, fig.align='center',tidy=TRUE}
+Cae.rel.abund=((benthos$CAE/rowSums(benthos[2:39]))*100)
+Cae.rel.abund.exp=((benthos.exp$CAE/rowSums(benthos.exp[2:39]))*100)
+
+## TOTAL SEDIMENT NICKEL
+
+#Birch+Weir in one regression
+summary(lm(log(Cae.rel.abund+1)~log(allrefs$TotalNi.surf)))
+shapiro.test((resid(lm(log(Cae.rel.abund+1)~log(allrefs$TotalNi.surf)))))
+
+par(pin=c(3,3))
+plot(Cae.rel.abund~allrefs$TotalNi.surf,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlim=c(30,600),ylim=c(0,13),
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+
+abline(lm(Cae.rel.abund[1:20]~log10(allrefs$TotalNi.surf[1:20])),lty=3,lwd=3,col="tan1")
+abline(lm(Cae.rel.abund[21:40]~log10(allrefs$TotalNi.surf[21:40])),lty=1,lwd=3,col="dodgerblue4")
+
+par(xpd=T)
+legend(750,14,"Birch Reference",pch=17,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+legend(750,12.75,"Birch Exposure",pch=2,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+legend(750,11.5,"Weir Reference",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(750,10.25,"Weir Exposure",pch=1,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+
+#Birch+Weir in *separate* regressions
+allrefs$Location = (c(rep("Birchtree",20),(rep("Weir",20))))
+summary(lm(log((Cae.rel.abund+1)[1:20])~log(allrefs$TotalNi.surf[1:20])))
+shapiro.test((resid(lm(log((Cae.rel.abund+1)[1:20])~log(allrefs$TotalNi.surf[1:20])))))
+
+summary(lm(log((Cae.rel.abund+1)[21:40])~log(allrefs$TotalNi.surf[21:40])))
+shapiro.test((resid(lm(log((Cae.rel.abund+1)[21:40])~log(allrefs$TotalNi.surf[21:40])))))
+
+plot(((Cae.rel.abund+1)[1:20])~TotalNi.surf,data=allrefs[1:20,],log="xy",
+     pch=ps.exp,lwd=3,las=1,cex=1.5,col=color.exp,xlim=c(40,550),ylim=c(1,15),
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+points(((Cae.rel.abund+1)[21:40])~TotalNi.surf,data=allrefs[21:40,],
+       pch=ps.exp,lwd=3,las=1,cex=1.5,col=color.exp)
+
+abline(lm(log10((Cae.rel.abund+1)[1:20])~log10(TotalNi.surf),data=allrefs[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(log10((Cae.rel.abund+1)[21:40])~log10(TotalNi.surf),data=allrefs[21:40,]),lty=1,lwd=3,col="dodgerblue4")
+
+## FE-CORRECTED NICKEL
+
+#Birch+Weir in one regression
+summary(lm(log(Cae.rel.abund+1)~log(allrefs$Ni.Fe)))
+shapiro.test((resid(lm(log(Cae.rel.abund+1)~log(allrefs$Ni.Fe)))))
+
+par(pin=c(3,3))
+plot((Cae.rel.abund+1)~allrefs$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlim=c(20,550),ylim=c(1,15),
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+
+abline(lm(log10((Cae.rel.abund+1)[1:20])~log10(Ni.Fe),data=allrefs[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(log10((Cae.rel.abund+1)[21:40])~log10(Ni.Fe),data=allrefs[21:40,]),lty=1,lwd=3,col="dodgerblue4")
+
+#Birch+Weir in *separate* regressions
+allrefs$Location = (c(rep("Birchtree",20),(rep("Weir",20))))
+
+summary(lm(log((Cae.rel.abund+1)[1:20])~log(allrefs$Ni.Fe[1:20])))
+shapiro.test((resid(lm(log((Cae.rel.abund+1)[1:20])~log(allrefs$Ni.Fe[1:20])))))
+
+summary(lm(log((Cae.rel.abund+1)[21:40])~log(allrefs$Ni.Fe[21:40])))
+shapiro.test((resid(lm(log((Cae.rel.abund+1)[21:40])~log(allrefs$Ni.Fe[21:40])))))
+
+plot(((Cae.rel.abund+1)[1:20])~Ni.Fe,data=allrefs[1:20,],log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlim=c(20,550),
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+points(((Cae.rel.abund+1)[21:40])~Ni.Fe,data=allrefs[21:40,],
+       pch=ps,lwd=3,las=1,cex=1.5,col=color.sample)
+
+abline(lm(log10((Cae.rel.abund+1)[1:20])~log10(Ni.Fe),data=allrefs[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(log10((Cae.rel.abund+1)[21:40])~log10(Ni.Fe),data=allrefs[21:40,]),lty=3,lwd=3,col="dodgerblue4")
+
+# Fe-corrected Ni: Caenidae
+summary(lm(Cae.rel.abund.exp~log(thomp.exp$Ni.Fe)))
+shapiro.test(resid(lm(Cae.rel.abund.exp~log(thomp.exp$Ni.Fe))))
+
+par(pin=c(3,3))
+plot(Cae.rel.abund~allrefs$Ni.Fe,
+     pch=ps,lwd=3,las=1,cex=1.5,ylim=c(0,15),col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+
+par(pin=c(3,3))
+plot((Cae.rel.abund.exp+1)~thomp.exp$Ni.Fe,
+     log="xy",pch=ps.exp,lwd=3,las=1,cex=1.5,col=color.exp,xlim=c(20,550),ylim=c(1,15),
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+
+## SEM-AVS/fOC
+
+#Birch+Weir in one regression
+summary(lm(log(Cae.rel.abund+1)~log(allrefs$SEMAVSfOC.surf)))
+shapiro.test((resid(lm(log(Cae.rel.abund+1)~log(allrefs$SEMAVSfOC.surf)))))
+
+par(pin=c(3,3))
+plot((Cae.rel.abund+1)~allrefs$SEMAVSfOC.surf,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,ylim=c(1,15),xlim=c(5,120),
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),ylab="Caenidae abundance (%)")
+
+abline(lm(log10((Cae.rel.abund+1)[1:20])~log10(SEMAVSfOC.surf),data=allrefs[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(log10((Cae.rel.abund+1)[21:40])~log10(SEMAVSfOC.surf),data=allrefs[21:40,]),lty=1,lwd=3,col="dodgerblue4")
+
+#Birch+Weir in *separate* regressions
+allrefs$Location = (c(rep("Birchtree",20),(rep("Weir",20))))
+
+summary(lm(log((Cae.rel.abund+1)[1:20])~log(allrefs$SEMAVSfOC.surf[1:20])))
+shapiro.test((resid(lm(log((Cae.rel.abund+1)[1:20])~log(allrefs$SEMAVSfOC.surf[1:20])))))
+
+summary(lm(log((Cae.rel.abund+1)[21:40])~log(allrefs$SEMAVSfOC.surf[21:40])))
+shapiro.test((resid(lm(log((Cae.rel.abund+1)[21:40])~log(allrefs$SEMAVSfOC.surf[21:40])))))
+
+plot(((Cae.rel.abund+1)[1:20])~SEMAVSfOC.surf,data=allrefs[1:20,],log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlim=c(20,550),
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="Caenidae abundance (%)")
+points(((Cae.rel.abund+1)[21:40])~SEMAVSfOC.surf,data=allrefs[21:40,],
+       pch=ps,lwd=3,las=1,cex=1.5,col=color.sample)
+
+abline(lm(log10((Cae.rel.abund+1)[1:20])~log10(SEMAVSfOC.surf),data=allrefs[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(log10((Cae.rel.abund+1)[21:40])~log10(SEMAVSfOC.surf),data=allrefs[21:40,]),lty=3,lwd=3,col="dodgerblue4")
+
+summary(lm(log(Cae.rel.abund.exp+1)~log(thomp.exp$SEMAVSfOC.surf)))
+```
+
+# GAMMARIDAE
+
+```{r Gam [Ni] SURF Exp only, fig.align='center',tidy=TRUE}
+Gam.rel.abund=((benthos$GAM/rowSums(benthos[2:39]))*100)
+Gam.rel.abund.exp=((benthos.exp$TAL/rowSums(benthos.exp[2:39]))*100)
+
+summary(lm(Gam.rel.abund.exp~log(thomp.exp$TotalNi.surf))) # All sites
+shapiro.test(resid(lm(Gam.rel.abund.exp~log(thomp.exp$TotalNi.surf))))
+
+summary(lm(Gam.rel.abund.exp[1:10]~log10(thomp.exp$TotalNi.surf[1:10]))) # Birch
+shapiro.test(resid(lm(Gam.rel.abund.exp[1:10]~log(thomp.exp$TotalNi.surf[1:10]))))
+
+summary(lm(Gam.rel.abund.exp[11:20]~log10(thomp.exp$TotalNi.surf[11:20]))) # Weir
+shapiro.test(resid(lm(Gam.rel.abund.exp[11:20]~log(thomp.exp$TotalNi.surf[11:20]))))
+
+par(pin=c(3,3))
+plot(Gam.rel.abund.exp~thomp.exp$TotalNi.surf,log="x",col=color.exp,
+     pch=ps.exp,lwd=3,las=1,cex=1.5,ylim=c(0,50),xlim=c(50,1000),
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Gammaridae abundance (%)",xaxt="n")
+logaxis(1,3,1)
+
+# legend(250,50,"Birch",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5)
+# legend(250,45,"Weir",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5)
+```
+
+```{r Gam [Ni] SURF corrected for Fe Exp only, fig.align='center',tidy=TRUE}
+summary(lm(Gam.rel.abund.exp~log(thomp.exp$Ni.Fe)))
+summary(lm(Gam.rel.abund.exp[1:10]~log(thomp.exp$Ni.Fe[1:10])))
+summary(lm(Gam.rel.abund.exp[11:20]~log(thomp.exp$Ni.Fe[11:20])))
+
+par(pin=c(3,3))
+plot(Gam.rel.abund.exp~thomp.exp$Ni.Fe,pch=ps.exp,log="x",lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(25,1000),col=color.exp,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),ylab="",xaxt="n")
+logaxis(1,3,1)
+
+abline(lm(Gam.rel.abund.exp[1:10]~log10(thomp.exp$Ni.Fe[1:10])),lty=3,lwd=3,col="tan1")
+abline(lm(Gam.rel.abund.exp[11:20]~log10(thomp.exp$Ni.Fe[11:20])),lty=1,lwd=3,col="dodgerblue4")
+```
+
+```{r Gam SEM-AVS/ƒOC Exp only, fig.align='center',tidy=TRUE}
+summary(lm(Gam.rel.abund.exp~log(thomp.exp$SEMAVSfOC.surf)))
+summary(lm(Gam.rel.abund.exp[1:10]~log10(thomp.exp$SEMAVSfOC.surf[1:10])))
+summary(lm(Gam.rel.abund.exp[11:20]~log10(thomp.exp$SEMAVSfOC.surf[11:20])))
+
+par(pin=c(3,3))
+plot(Gam.rel.abund.exp~thomp.exp$SEMAVSfOC.surf,log="x",pch=ps.exp,lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(10,200),col=color.exp,
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),ylab="",xaxt="n")
+logaxis(1,3,1)
+```
+
+------
+
+# EPHEMERIDAE BIOMASS
+
+```{r Biomass graphing codes}
+Sample.ID=as.vector(biomass$Sample.ID)
+BR_hex=grepl("BR.*",Sample.ID)
+BE_hex=grepl("BE.*",Sample.ID)
+WR_hex=grepl("WR.*",Sample.ID)
+WE_hex=grepl("WE.*",Sample.ID)
+
+color.hex=ifelse(BR_hex==T,"forestgreen",
+                    ifelse(WR_hex==T,"forestgreen",
+                           ifelse(BE_hex==T,"firebrick4",
+                                  ifelse(WE_hex==T,"firebrick4",1))))
+ps.hex=ifelse(BR_hex==T,17,
+          ifelse(WR_hex==T,16,
+                 ifelse(BE_hex==T,2,
+                        ifelse(WE_hex==T,1,13))))
+```
+
+```{r include=F}
+biomass$TOTNi <- allrefs$TotalNi.surf
+biomass$SEMAVSfOC=allrefs$SEMAVSfOC.surf
+biomass$Ni.Fe <- allrefs$TotalNi.surf-allrefs$ASCNi.surf # Variable of Ni corrected for Fe, i.e., portion of total nickel not bound to oxides
+hex.exp <- biomass[c(11:20,31:40),]
+```
+
+# Length and biomass: ANOVAs
+```{r}
+EF_HEX <- aov(Mean.length~Effluent,data=biomass)
+summary(EF_HEX)
+shapiro.test(resid(EF_HEX))
+par(mfrow=c(1,2))
+plot(EF_HEX,which=c(1,2))
+TukeyHSD(EF_HEX)
+par(mfrow=c(1,1),pin=c(3,3))
+boxplot(Mean.length~Effluent,data=biomass,las=2,cex.axis=0.9)
+```
+
+# [Ni] SURF corrected for Fe: *LENGTH* STATS
+```{r Ni.Fe Length stats}
+# ALL SITES (REF+EXP)
+NiCor_TOTLEN <- lm(Total.length~log(Ni.Fe),data=biomass)
+summary(NiCor_TOTLEN)
+shapiro.test(resid(NiCor_TOTLEN))
+
+NiCor_AVGLEN <- lm(Mean.length~log(Ni.Fe),data=biomass)
+summary(NiCor_AVGLEN)
+shapiro.test(resid(NiCor_AVGLEN))
+
+NiCor_MEDLEN <- lm(Median.length~log(Ni.Fe),data=biomass)
+summary(NiCor_MEDLEN)
+shapiro.test(resid(NiCor_MEDLEN))
+
+# EXPOSURE SITES ONLY
+
+NiCor_TOTLEN <- lm(log(Total.length)~log(Ni.Fe),data=hex.exp)
+summary(NiCor_TOTLEN)
+shapiro.test(resid(NiCor_TOTLEN))
+
+NiCor_AVGLEN <- lm(Mean.length~log(Ni.Fe),data=hex.exp)
+summary(NiCor_AVGLEN)
+shapiro.test(resid(NiCor_AVGLEN))
+
+NiCor_MEDLEN <- lm(Median.length~log(Ni.Fe),data=hex.exp)
+summary(NiCor_MEDLEN)
+shapiro.test(resid(NiCor_MEDLEN))
+```
+
+# [Ni] SURF corrected for Fe: *LENGTH* GRAPHS
+```{r Ni.Fe Length graphs, fig.align='center', tidy=TRUE}
+
+# ALL SITES (REF+EXP)
+par(pin=c(3,3))
+
+# Total length
+plot(biomass$Total.length~biomass$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae total length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Total.length)~log10(chem.inv$Ni.Fe),data=biomass),lty=3,lwd=3,col="red")
+
+# Mean length
+plot(biomass$Mean.length~biomass$Ni.Fe,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae mean length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(Mean.length~log10(Ni.Fe),data=biomass),lty=3,lwd=3,col="red")
+
+# Median length
+plot(biomass$Median.length~biomass$Ni.Fe,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae median length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(Median.length~log10(Ni.Fe),data=biomass),lty=3,lwd=3,col="red")
+
+# EXPOSURE SITES ONLY
+par(pin=c(3,3))
+
+# Total length
+plot(hex.exp$Total.length~hex.exp$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae total length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Total.length)~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
+
+# Mean length
+plot(hex.exp$Mean.length~hex.exp$Ni.Fe,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae mean length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(Mean.length~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
+
+# Median length
+plot(hex.exp$Median.length~hex.exp$Ni.Fe,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae median length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(Median.length~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
+```
+
+# [Ni] SURF corrected for Fe: *BIOMASS* STATS
+```{r Ni.Fe Biomass stats}
+# ALL SITES (REF+EXP)
+
+NiCor_TOTBIO <- lm(Total.biomass~log(Ni.Fe),data=biomass)
+summary(NiCor_TOTBIO)
+shapiro.test(resid(NiCor_TOTBIO))
+
+NiCor_AVGBIO <- lm(log(Mean.biomass+1)~log(Ni.Fe),data=biomass)
+summary(NiCor_AVGBIO)
+shapiro.test(resid(NiCor_AVGBIO))
+
+NiCor_MEDBIO <- lm(log(Median.biomass+1)~log(Ni.Fe),data=biomass)
+summary(NiCor_MEDBIO)
+shapiro.test(resid(NiCor_MEDBIO))
+
+# EXPOSURE SITES ONLY
+
+NiCor_TOTBIO <- lm(log(Total.biomass)~log(Ni.Fe),data=hex.exp)
+summary(NiCor_TOTBIO)
+shapiro.test(resid(NiCor_TOTBIO))
+
+NiCor_AVGBIO <- lm(log(Mean.biomass)~log(Ni.Fe),data=hex.exp)
+summary(NiCor_AVGBIO)
+shapiro.test(resid(NiCor_AVGBIO))
+
+NiCor_MEDBIO <- lm(log(Median.biomass)~log(Ni.Fe),data=hex.exp)
+summary(NiCor_MEDBIO)
+shapiro.test(resid(NiCor_MEDBIO))
+```
+
+# [Ni] SURF corrected for Fe: *BIOMASS* GRAPHS
+```{r Ni.Fe Biomass graphs, fig.align='center',tidy=TRUE}
+# ALL SITES (REF+EXP)
+par(pin=c(3,3))
+
+# Total biomass
+plot(biomass$Total.biomass~biomass$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae total biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Total.biomass)~log10(Ni.Fe),data=biomass),lty=3,lwd=3,col="red")
+
+# Mean biomass
+plot(biomass$Mean.biomass~biomass$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae mean biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Mean.biomass)~log10(Ni.Fe),data=biomass),lty=3,lwd=3,col="red")
+
+# Median biomass
+plot(biomass$Median.biomass~biomass$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae median biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Median.biomass)~log10(Ni.Fe),data=biomass),lty=3,lwd=3,col="red")
+
+# EXPOSURE SITES ONLY
+par(pin=c(3,3))
+
+# Total biomass
+plot(hex.exp$Total.biomass~hex.exp$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae total biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Total.biomass)~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
+
+# Mean biomass
+plot(hex.exp$Mean.biomass~hex.exp$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae mean biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Mean.biomass)~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
+
+# Median biomass
+plot(hex.exp$Median.biomass~hex.exp$Ni.Fe,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" - Ni"[HFO]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae median biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Median.biomass)~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
+```
+
+# TOTAL Ni: *LENGTH* STATS
+```{r TOTNi Length stats, fig.align='center', tidy=TRUE}
+# ALL SITES (REF+EXP)
+TOTNi_TOTLEN <- lm(Total.length~log(TOTNi),data=biomass)
+summary(TOTNi_TOTLEN)
+shapiro.test(resid(TOTNi_TOTLEN))
+
+TOTNi_AVGLEN <- lm(Mean.length~TOTNi,data=biomass)
+summary(TOTNi_AVGLEN)
+shapiro.test(resid(TOTNi_AVGLEN))
+
+TOTNi_MEDLEN <- lm(Median.length~TOTNi,data=biomass)
+summary(TOTNi_MEDLEN)
+shapiro.test(resid(TOTNi_MEDLEN))
+
+# EXPOSURE SITES ONLY
+TOTNi_TOTLEN <- lm(log(Total.length)~log(TOTNi),data=hex.exp)
+summary(TOTNi_TOTLEN)
+shapiro.test(resid(TOTNi_TOTLEN))
+
+TOTNi_AVGLEN <- lm(Mean.length~TOTNi,data=hex.exp)
+summary(TOTNi_AVGLEN)
+shapiro.test(resid(TOTNi_AVGLEN))
+
+TOTNi_MEDLEN <- lm(Median.length~TOTNi,data=hex.exp)
+summary(TOTNi_MEDLEN)
+shapiro.test(resid(TOTNi_MEDLEN))
+```
+
+## TOTAL Ni: *LENGTH* GRAPHS
+```{r TOTNi Length graphs, fig.align='center',tidy=TRUE}
+# ALL SITES (REF+EXP)
+
+
+# EXPOSURE SITES ONLY
+par(pin=c(3,3))
+plot(hex.exp$Total.length~hex.exp$TOTNi,log="xy",pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Ephemeridae total length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Total.length)~log10(TOTNi),data=hex.exp),lty=3,lwd=3,col="red")
+
+plot(hex.exp$Mean.length~hex.exp$TOTNi,pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Ephemeridae mean length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(Mean.length~TOTNi,data=hex.exp),lty=3,lwd=3,col="red")
+
+plot(hex.exp$Median.length~hex.exp$TOTNi,pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Ephemeridae median length (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(Median.length~TOTNi,data=hex.exp),lty=3,lwd=3,col="red")
+```
+
+# TOTAL Ni: *BIOMASS* STATS
+```{r TOTNi Biomass stats, fig.align='center', tidy=TRUE}
+# ALL SITES (REF+EXP)
+TOTNi_TOTBIO <- lm(log(Total.biomass+1)~log(TOTNi),data=biomass)
+summary(TOTNi_TOTBIO)
+shapiro.test(resid(TOTNi_TOTBIO))
+
+TOTNi_AVGBIO <- lm(log(Mean.biomass+1)~log(TOTNi),data=biomass)
+summary(TOTNi_AVGBIO)
+shapiro.test(resid(TOTNi_AVGBIO))
+
+TOTNi_MEDBIO <- lm(log(Median.biomass+1)~log(TOTNi),data=biomass)
+summary(TOTNi_MEDBIO)
+shapiro.test(resid(TOTNi_MEDBIO))
+
+# EXPOSURE SITES ONLY
+TOTNi_TOTBIO <- lm(log(Total.biomass)~log(TOTNi),data=hex.exp)
+summary(TOTNi_TOTBIO)
+shapiro.test(resid(TOTNi_TOTBIO))
+
+TOTNi_AVGBIO <- lm(log(Mean.biomass)~log(TOTNi),data=hex.exp)
+summary(TOTNi_AVGBIO)
+shapiro.test(resid(TOTNi_AVGBIO))
+
+TOTNi_MEDBIO <- lm(log(Median.biomass)~log(TOTNi),data=hex.exp)
+summary(TOTNi_MEDBIO)
+shapiro.test(resid(TOTNi_MEDBIO))
+```
+
+# TOTAL Ni: *BIOMASS* GRAPHS
+```{r TOTNi Biomass graphs, fig.align='center',tidy=TRUE}
+# ALL SITES (REF+EXP)
+par(pin=c(3,3))
+
+# Total biomass
+plot(biomass$Total.biomass~biomass$TOTNi,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae total biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+#abline(lm(Total.biomass~log10(TOTNi),data=biomass),lty=3,lwd=3,col="red")
+abline(lm(Total.biomass~log10(TOTNi),data=biomass[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(Total.biomass~log10(TOTNi),data=biomass[21:40,]),lty=1,lwd=3,col="dodgerblue4")
+
+# Mean biomass
+plot(biomass$Mean.biomass~biomass$TOTNi,log="x",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae mean biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+#abline(lm(Mean.biomass~log10(TOTNi),data=biomass),lty=3,lwd=3,col="red")
+abline(lm(Mean.biomass~log10(TOTNi),data=biomass[1:20,]),lty=3,lwd=3,col="tan1")
+abline(lm(Mean.biomass~log10(TOTNi),data=biomass[21:40,]),lty=1,lwd=3,col="dodgerblue4")
+axis(1,at=c(250,500), labels=c("250","500"), tick=F)
+
+par(xpd=T)
+legend(600,180,"Birch Reference",pch=17,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+legend(600,167,"Birch Exposure",pch=2,pt.lwd=3,col="tan1",text.col="tan1",bty="n")
+legend(600,154,"Weir Reference",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+legend(600,141,"Weir Exposure",pch=1,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
+
+# Median biomass
+plot(biomass$Median.biomass~biomass$TOTNi,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae median biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Median.biomass)~log10(TOTNi),data=biomass),lty=3,lwd=3,col="red")
+
+# EXPOSURE SITES ONLY
+par(pin=c(3,3))
+
+# Total biomass
+par(pin=c(3,3))
+plot(hex.exp$Total.biomass~hex.exp$TOTNi,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae total biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Total.biomass)~log10(TOTNi),data=hex.exp),lty=3,lwd=3,col="red")
+
+# Mean biomass
+plot(hex.exp$Mean.biomass~hex.exp$TOTNi,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae mean biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Mean.biomass)~log10(TOTNi),data=hex.exp),lty=3,lwd=3,col="red")
+
+# Median biomass
+plot(hex.exp$Median.biomass~hex.exp$TOTNi,log="xy",
+     pch=ps,lwd=3,las=1,cex=1.5,col=color.sample,
+     xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),
+     ylab="Ephemeridae median biomass (mg wet weight)",xaxt="n")
+logaxis(1,3,1)
+abline(lm(log10(Median.biomass)~log10(TOTNi),data=hex.exp),lty=3,lwd=3,col="red")
+```
+
+------
+
+# REDUNDANCY ANALYSIS AND FORWARD SELECTION
+
+## ALL SITES: Hellinger distance transformation
+```{r RDA datasets, include=F}
+library(vegan)
+
+benthos$RDA.names <- c("Ref.B1","Ref.B2","Ref.B3","Ref.B4","Ref.B5",
+                      "Ref.B6","Ref.B7","Ref.B8","Ref.B9","Ref.B10",
+                      "Exp.B1","Exp.B2","Exp.B3","Exp.B4","Exp.B5",
+                      "Exp.B6","Exp.B7","Exp.B8","Exp.B9","Exp.B10",
+                      "Ref.W1","Ref.W2","Ref.W3","Ref.W4","Ref.W5",
+                      "Ref.W6","Ref.W7","Ref.W8","Ref.W9","Ref.W10",
+                      "Exp.W1","Exp.W2","Exp.W3","Exp.W4","Exp.W5",
+                      "Exp.W6","Exp.W7","Exp.W8","Exp.W9","Exp.W10")
+
+# Change W (Weir) for T (Thompson)
+benthos$RDA.names.T <- c("Ref.B1","Ref.B2","Ref.B3","Ref.B4","Ref.B5",
+                        "Ref.B6","Ref.B7","Ref.B8","Ref.B9","Ref.B10",
+                        "Exp.B1","Exp.B2","Exp.B3","Exp.B4","Exp.B5",
+                        "Exp.B6","Exp.B7","Exp.B8","Exp.B9","Exp.B10",
+                        "Ref.T1","Ref.T2","Ref.T3","Ref.T4","Ref.T5",
+                        "Ref.T6","Ref.T7","Ref.T8","Ref.T9","Ref.T10",
+                        "Exp.T1","Exp.T2","Exp.T3","Exp.T4","Exp.T5",
+                        "Exp.T6","Exp.T7","Exp.T8","Exp.T9","Exp.T10")
+
+chem.inv.hel <- cbind(chem.inv[,1:65],decostand(chem.inv[,67:104],"hellinger"))
+inv.hel <- chem.inv.hel[,66:103]
+
+chem.inv.hel.exp <- cbind(chem.inv.exp[,1:65],decostand(chem.inv.exp[,67:104],method="hellinger"))
+inv.hel.exp <- chem.inv.hel.exp[,66:103]
+
+benthos.exp$RDA.names <- c("Exp.B1","Exp.B2","Exp.B3","Exp.B4","Exp.B5","Exp.B6","Exp.B7","Exp.B8","Exp.B9","Exp.B10","Exp.W1","Exp.W2","Exp.W3","Exp.W4","Exp.W5","Exp.W6","Exp.W7","Exp.W8","Exp.W9","Exp.W10")
+```
+
+## Forward selection with ordiR2step
+
+> ALL SITES: water
+
+```{r ALL SITES water RDA, fig.align='center',tidy=TRUE}
+rda.water.base=rda(inv.hel~1,allrefs)
+anova(rda.water.base)
+
+rda.water=rda(inv.hel~Cond+pH+Ni+Chl+SO4,allrefs)
+  anova(rda.water)
+  RsquareAdj(rda.water)
+
+rda.water.for=ordiR2step(rda.water.base, rda.water, direction="forward") 
+  anova(rda.water.for)
+  rda.water.for
+
+rda.water.sel=rda(chem.inv.hel[,66:103],chem.inv.hel[,c("Cond","pH")])
+  summary(rda.water.sel)
+  anova(rda.water.sel)
+  RsquareAdj(rda.water.sel)
+  good.water=(goodness(rda.water.sel))*100
+  water.RDA1=good.water[,1]
+  water.RDA2=good.water[,2]
+par(pin=c(5,5))
+plot(rda.water.sel)
+```
+
+> ALL SITES: Surface Sediment
+
+```{r ALL SITES Surface Sediment RDA, fig.align='center',tidy=TRUE}
+rda.surf.base=rda(inv.hel~TotalNi.surf,allrefs)
+anova(rda.surf.base)
+
+rda.surf=rda(inv.hel~AVS.surf+C.surf+PSEMFe.surf+PSEMMn.surf+PSEMNi.surf
+                            +TotalFe.surf+TotalMn.surf+TotalNi.surf
+                            +PAmNi.surf+PCrysNi.surf+PAmFe.surf+PCrysFe.surf
+                            +POxidMn.surf,allrefs)
+  anova(rda.surf)
+  RsquareAdj(rda.surf)
+
+rda.surf.for=ordiR2step(rda.surf.base, rda.surf, direction="forward",trace=T) 
+  anova(rda.surf.for)
+  rda.surf.for
+
+rda.surf.sel=rda(chem.inv.hel[,66:103],chem.inv.hel[,c("TotalNi.surf","PAmFe.surf")])
+  anova(rda.surf.sel)
+  summary(rda.surf.sel)
+  RsquareAdj(rda.surf.sel)
+  good.surf=(goodness(rda.surf.sel))*100
+  good.surf[is.na(good.surf)]=0
+  surf.RDA1=good.surf[,1]
+  surf.RDA2=good.surf[,2]
+par(pin=c(5,5))
+plot(rda.surf.sel)
+```
+
+```{r Water and Surf Sed RDA plots}
+# Graphing code
+sites=as.vector(benthos$RDA.names)
+sites.T=as.vector(benthos$RDA.names.T) # 'Thompson' rather than 'Weir'
+
+ref=grepl("Ref.*",sites)
+exp=grepl("Exp.*",sites)
+
+ref.b=grepl("Ref\\.B.*",sites.T)
+ref.t=grepl("Ref\\.T.*",sites.T)
+exp.b=grepl("Exp\\.B.*",sites.T)
+exp.t=grepl("Exp\\.T.*",sites.T)
+
+colRDA=ifelse(ref.b==T,"springgreen3",
+                    ifelse(ref.t==T,"springgreen3",
+                           ifelse(exp.b==T,"sienna1",
+                                  ifelse(exp.t==T,"sienna1",1))))
+ptRDA=ifelse(ref.b==T,1,
+          ifelse(ref.t==T,2,
+                 ifelse(exp.b==T,5,
+                        ifelse(exp.t==T,6,13))))
+
+site.col=ifelse(ref==T,"#00A100BA", # Use function rgb() to choose colors or go to paint and use Hex # for the color selected. "BF" in the end refers to transparency
+                                  ifelse(exp==T,"#A10000AF",1))
+
+watercol.RDA=ifelse(water.RDA1>20, "steelblue4",
+                    ifelse(water.RDA2>20,"steelblue4",
+                           ifelse(good.water<20,"steelblue2","steelblue4")))
+
+
+# Water RDA plots
+  #par(mfrow=c(1,2),xpd=F)
+par(pin=c(3,3))
+plot(rda.water.sel,type="none",xlab="RDA1 (7.58%)",ylab="RDA2 (6.37%)",xaxt="n",yaxt="n",xlim = c(-1.1,1.1), ylim=c(-1.1,1.1))
+axis(2, at=c(-1,-0.5,0,0.5,1), labels=c("-1.0","-0.5","0.0","0.5","1.0"), las=2)
+axis(1, at=c(-1,-0.5,0,0.5,1), labels=c("-1.0","-0.5","0.0","0.5","1.0"), las=1)
+# plot(rda.water.sel,type="none",xlab="RDA1 (7.18%)",ylab="PCA1 (23.56%)")
+# text(rda.water.sel,labels=benthos$RDA.names.T,col="gray50", cex=0.8) # Use site.col if want sites to be colored
+points(rda.water.sel,pch=ptRDA,col=colRDA,cex=1.1,lwd=1) # Points instead of text for sites
+text(rda.water.sel,display="species",col=watercol.RDA,cex=1.2,font=2)
+text(-0.0542531,0.106648,"DYT",col=watercol.RDA,cex=1.2,font=2)
+# text(-0.0306055,0.003779,"PHI",col=watercol.RDA,cex=1.2,font=2)
+# text(rda.water.sel,display="bp",col=1)
+arrows(0,0,-0.63,0.44,length=0.1, angle=15,lwd=2)
+text(-0.85,0.3,"Conductivity",font=2,cex=0.75)
+arrows(0,0,0.13,0.75,length=0.1, angle=15,lwd=2)
+text(0.15,0.84,"pH",font=2,cex=0.75)
+# arrows(0,0,0.7,0,length=0.1, angle=15,lwd=2)
+# text(0.7,-0.1,"Conductivity",cex=1,font=2)
+
+# Surface Sediment RDA plots
+surfcol.RDA=ifelse(surf.RDA1>20, "steelblue4",
+                   ifelse(surf.RDA2>20,"steelblue4",
+                          ifelse(good.surf<20,"steelblue2","steelblue4")))
+
+par(pin=c(3,3))
+plot(rda.surf.sel,type="none",xlab="RDA1 (8.89%)",ylab="RDA2 (6.19%)",xaxt="n",yaxt="n",xlim = c(-1.1,1.1), ylim=c(-1.1,1.1))
+axis(2, at=c(-1,-0.5,0,0.5,1), labels=c("-1.0","-0.5","0.0","0.5","1.0"), las=2)
+axis(1, at=c(-1,-0.5,0,0.5,1), labels=c("-1.0","-0.5","0.0","0.5","1.0"), las=1)
+#text(rda.surf.sel,labels=benthos$RDA.names.T,col="gray50",cex=0.8) # Use site.col if want sites to be colored
+points(rda.surf.sel,pch=ptRDA,col=colRDA,cex=1.1,lwd=1) # Points instead of text for sites
+text(rda.surf.sel,display="species",col=surfcol.RDA,cex=1.2,font=2)
+#text(rda.surf.sel,display="bp",col=1)
+text(0.2569787,-0.0983111,"EPH",col=surfcol.RDA,cex=1.2,font=2)
+text(-0.1866039,0.0807989,"SPH",col=surfcol.RDA,cex=1.2,font=2)
+arrows(0,0,-0.45,0.70,length=0.1, angle=15,lwd=2)
+text(-0.5,0.78,"Total Ni",lwd=2,cex=0.75,font=2)
+arrows(0,0,-0.19,-0.78,length=0.1, angle=15,lwd=2)
+text(-0.19,-0.85,"FeHFO",lwd=2,cex=0.75,font=2)
+
+par(xpd=T)
+legend(1.2,1.2,"Birchtree Reference",pch=1,pt.lwd=1,col="springgreen3",text.col="springgreen3",bty="n",cex=0.9)
+legend(1.2,1.08,"Thompson Reference",pch=2,pt.lwd=1,col="springgreen3",text.col="springgreen3",bty="n",cex=0.9)
+legend(1.2,0.96,"Birchtree Exposure",pch=5,pt.lwd=1,col="sienna1",text.col="sienna1",bty="n",cex=0.9)
+legend(1.2,0.84,"Thompson Exposure",pch=6,pt.lwd=1,col="sienna1",text.col="sienna1",bty="n",cex=0.9)
+```
+
+## EXPOSURE ONLY: Hellinger distance transformation
+
+## Forward selection with ordiR2step
+
+> EXPOSURE ONLY: water
+```{r fig.align='center'}
+rda.water.base.exp = rda(inv.hel.exp~1,allrefs[c(11:20,31:40),1:62])
+anova(benthos.exp.hel.rda.water.base)
+
+benthos.exp.hel.rda.var.water=rda(benthos.exp.hel~Cond+pH+Ni+Chl+SO4,allrefs[c(11:20,31:40),1:62])
+anova(benthos.exp.hel.rda.var.water)
+RsquareAdj(benthos.exp.hel.rda.var.water)
+
+benthos.exp.hel.rda.water.for=ordiR2step(benthos.exp.hel.rda.water.base, benthos.exp.hel.rda.var.water, direction="forward") 
+anova(benthos.exp.hel.rda.water.for)
+benthos.exp.hel.rda.water.for
+
+benthos.exp.hel.rda.water.sel=rda(benthos.chem.exp.hel[,63:100],benthos.chem.exp.hel[,c(37,38)])
+summary(benthos.exp.hel.rda.water.sel)
+RsquareAdj(benthos.exp.hel.rda.water.sel)
+good.water=(goodness(benthos.exp.hel.rda.water.sel))*100
+good.water[is.na(good.water)]=0
+water.RDA1=good.water[,1]
+water.RDA2=good.water[,2]
+par(pin=c(5,5))
+plot(benthos.exp.hel.rda.water.sel)
+
+# water variables RDA plots
+watercol.RDA=ifelse(water.RDA1>20, "steelblue4",
+                    ifelse(water.RDA2>20,"steelblue4",
+                    ifelse(good.water<20,"steelblue2","steelblue4")))
+
+par(pin=c(5,5))
+plot(benthos.exp.hel.rda.water.sel,type="none",xlab="RDA1 (16.59%)",ylab="RDA2 (6.88%)")
+# plot(benthos.exp.hel.rda.water.sel,type="none",xlab="RDA1 (7.18%)",ylab="PCA1 (23.56%)")
+text(benthos.exp.hel.rda.water.sel,labels=benthos.chem.exp.hel$RDA.names,col="darkgray", cex=0.8)
+text(benthos.exp.hel.rda.water.sel,display="species",col=watercol.RDA,cex=1.2,font=2)
+# text(benthos.exp.hel.rda.water.sel,display="bp",col=1)
+arrows(0,0,0.8,0.035,length=0.1, angle=15,lwd=2)
+text(0.85,0.1,"Conductivity",font=2)
+arrows(0,0,0.065,-0.8,length=0.1, angle=15,lwd=2)
+text(0.07,-0.85,"pH",font=2)
+# arrows(0,0,0.7,0,length=0.1, angle=15,lwd=2)
+# text(0.7,-0.1,"Conductivity",cex=1,font=2)
+```
+
+> EXPOSURE ONLY: Surface Sediment
+
+```{r fig.align='center'}
+library(vegan)
+benthos.exp.hel=benthos.chem.exp.hel[,63:100]
+benthos.exp.hel.rda.base=rda(benthos.exp.hel~TotalNi.surf,allrefs[c(11:20,31:40),1:62])
+anova(benthos.exp.hel.rda.base)
+
+benthos.exp.hel.rda.var.surf=rda(benthos.exp.hel~AVS.surf+PSEMFe.surf+PSEMMn.surf+PSEMNi.surf
+                             +TotalFe.surf+TotalMn.surf+TotalNi.surf
+                             +PAmNi.surf+PCrysNi.surf+PAmFe.surf+PCrysFe.surf+POxidMn.surf,allrefs[c(11:20,31:40),1:62])
+anova(benthos.exp.hel.rda.var.surf)
+RsquareAdj(benthos.exp.hel.rda.var.surf)
+
+benthos.exp.hel.rda.surf.for=ordiR2step(benthos.exp.hel.rda.base, benthos.exp.hel.rda.var.surf, direction="forward",trace=T) 
+anova(benthos.exp.hel.rda.surf.for)
+benthos.exp.hel.rda.surf.for
+
+benthos.exp.hel.rda.surf.sel=rda(benthos.chem.exp.hel[,63:100],benthos.chem.exp.hel[,c(14,49)])
+anova(benthos.exp.hel.rda.surf.sel)
+summary(benthos.exp.hel.rda.surf.sel)
+RsquareAdj(benthos.exp.hel.rda.surf.sel)
+good.surf=(goodness(benthos.exp.hel.rda.surf.sel))*100
+good.surf[is.na(good.surf)]=0
+surf.RDA1=good.surf[,1]
+surf.RDA2=good.surf[,2]
+par(pin=c(5,5))
+plot(benthos.exp.hel.rda.surf.sel)
+
+# Surface Sediment RDA plots
+surfcol.RDA=ifelse(surf.RDA1>20, "steelblue4",
+                   ifelse(surf.RDA2>20,"steelblue4",
+                          ifelse(good.surf<20,"steelblue2","steelblue4")))
+
+par(pin=c(5,5))
+plot(benthos.exp.hel.rda.surf.sel,type="none",xlab="RDA1 (18.05%)",ylab="RDA2 (5.56%)")
+text(benthos.exp.hel.rda.surf.sel,labels=benthos.chem.exp.hel$RDA.names,col="darkgray",cex=0.8)
+text(benthos.exp.hel.rda.surf.sel,display="species",col=surfcol.RDA,cex=1.2,font=2)
+# text(benthos.exp.hel.rda.surf.sel,display="bp",col=1)
+arrows(0,0,0.51,-0.6,length=0.1, angle=15,lwd=2)
+text(0.53,-0.68,expression(paste("Total Ni"[SURF]*"")),lwd=2)
+arrows(0,0,0.43,0.68,length=0.1, angle=15,lwd=2)
+text(0.58,0.7,expression(paste("Fe"[HFO]*"")),lwd=2)
+```
+
+
+```{r include=F}
+# Linear models between all invert RAW ABUNDANCES and surf and deep chem variables: p-values stored in matrix
+geochem.surf=allrefs[,c(1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,39,41,43,45,47,49,51,53,55,57,59,61)]
+geochem.deep=allrefs[,c(1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,40,42,44,46,48,50,52,54,56,58,60,62)]
+
+surf=data.frame(geochem.surf[,2:28])
+deep=data.frame(geochem.deep[,2:28])
+inv=data.frame(benthos[,2:39])
+  
+surfpval <- matrix(data=NA,nrow=38,ncol=27,dimnames <- list(colnames(inv),colnames(surf)))
+deeppval <- matrix(data=NA,nrow=38,ncol=27,dimnames <- list(colnames(inv),colnames(deep)))
+
+# Surface raw abundance loop
+for(i in 1:ncol(inv)) {
+  for(j in 1:ncol(surf)) {
+    surfmod <- summary(lm(inv[,i]~surf[,j]))
+    surfpval[i,j]=surfmod$coefficients[2,4]
+  }
+}
+
+# Deep raw abundance loop
+for(i in 1:ncol(inv)) {
+  for(j in 1:ncol(deep)) {
+    deepmod <- summary(lm(inv[,i]~deep[,j]))
+    deeppval[i,j]=deepmod$coefficients[2,4]
+  }
+}
+
+siglm <- matrix(data=NA,nrow=38,ncol=54,dimnames <- list(colnames(inv),c(colnames(surf),colnames(deep))))
+siglm <- cbind(surfpval < 0.05,deeppval < 0.05)
+sum(siglm)
+
+# Linear models between all invert RELATIVE ABUNDANCES and surf and deep chem variables: p-values stored in matrix
+benthos.rowsums=rowSums(benthos[,2:39])
+
+rel.abund=matrix(data=NA,ncol=38,nrow=40,dimnames <- list(benthos$Sample,colnames(benthos[,2:39])))
+rel.abund[,1]= (benthos$TAL/benthos.rowsums)*100
+rel.abund[,2]= (benthos$GAM/benthos.rowsums)*100
+rel.abund[,3]= (benthos$EPH/benthos.rowsums)*100
+rel.abund[,4]= (benthos$HEP/benthos.rowsums)*100
+rel.abund[,5]= (benthos$BAE/benthos.rowsums)*100
+rel.abund[,6]= (benthos$CAE/benthos.rowsums)*100
+rel.abund[,7]= (benthos$PSY/benthos.rowsums)*100
+rel.abund[,8]= (benthos$BRA/benthos.rowsums)*100
+rel.abund[,9]= (benthos$LEP/benthos.rowsums)*100
+rel.abund[,10]= (benthos$POL/benthos.rowsums)*100
+rel.abund[,11]= (benthos$HYD/benthos.rowsums)*100
+rel.abund[,12]= (benthos$LIM/benthos.rowsums)*100
+rel.abund[,13]= (benthos$PHR/benthos.rowsums)*100
+rel.abund[,14]= (benthos$PHI/benthos.rowsums)*100
+rel.abund[,15]= (benthos$COR/benthos.rowsums)*100
+rel.abund[,16]= (benthos$ELM/benthos.rowsums)*100
+rel.abund[,17]= (benthos$HAL/benthos.rowsums)*100
+rel.abund[,18]= (benthos$GYR/benthos.rowsums)*100
+rel.abund[,19]= (benthos$DYT/benthos.rowsums)*100
+rel.abund[,20]= (benthos$CAR/benthos.rowsums)*100
+rel.abund[,21]= (benthos$CHI/benthos.rowsums)*100
+rel.abund[,22]= (benthos$CER/benthos.rowsums)*100
+rel.abund[,23]= (benthos$CUL/benthos.rowsums)*100
+rel.abund[,24]= (benthos$THA/benthos.rowsums)*100
+rel.abund[,25]= (benthos$MUS/benthos.rowsums)*100
+rel.abund[,26]= (benthos$TAB/benthos.rowsums)*100
+rel.abund[,27]= (benthos$PLA/benthos.rowsums)*100
+rel.abund[,28]= (benthos$VAL/benthos.rowsums)*100
+rel.abund[,29]= (benthos$LYM/benthos.rowsums)*100
+rel.abund[,30]= (benthos$UNI/benthos.rowsums)*100
+rel.abund[,31]= (benthos$SPH/benthos.rowsums)*100
+rel.abund[,32]= (benthos$COE/benthos.rowsums)*100
+rel.abund[,33]= (benthos$GOM/benthos.rowsums)*100
+rel.abund[,34]= (benthos$CAM/benthos.rowsums)*100
+rel.abund[,35]= (benthos$SIA/benthos.rowsums)*100
+rel.abund[,36]= (benthos$CP/benthos.rowsums)*100
+rel.abund[,37]= (benthos$HI/benthos.rowsums)*100
+rel.abund[,38]= (benthos$NE/benthos.rowsums)*100
+
+surf=data.frame(geochem.surf[,2:28])
+deep=data.frame(geochem.deep[,2:28])
+relab=data.frame(rel.abund)
+
+surfabpval <- matrix(data=NA,nrow=38,ncol=27,dimnames <- list(colnames(inv),colnames(surf)))
+deepabpval <- matrix(data=NA,nrow=38,ncol=27,dimnames <- list(colnames(inv),colnames(deep)))
+
+# Surface relative abundance loop
+for(i in 1:ncol(relab)) {
+  for(j in 1:ncol(surf)) {
+    surfabmod <- summary(lm(relab[,i]~surf[,j]))
+    surfabpval[i,j]=surfabmod$coefficients[2,4]
+  }
+}
+
+# Deep relative abundance loop
+for(i in 1:ncol(relab)) {
+  for(j in 1:ncol(deep)) {
+    deepabmod <- summary(lm(relab[,i]~deep[,j]))
+    deepabpval[i,j]=deepabmod$coefficients[2,4]
+  }
+}
+
+absiglm <- matrix(data=NA,nrow=38,ncol=54,dimnames <- list(colnames(relab),c(colnames(surf),colnames(deep))))
+absiglm <- cbind(surfabpval < 0.05,deepabpval < 0.05)
+sum(absiglm)
+```
+
+------
+
+# Invert vs. chemistry models
+## "adonis" {vegan} function gives variable significance but not overall model significance (latter given by "rda")
+
+# Sed Surf
+adonis(benthos.chem.rda.allrefs.hel[,56:93]~TotalNi.surf+TotalFe.surf+TotalMn.surf+
+         AVS.surf+PSEMFe.surf+PSEMMn.surf+PSEMNi.surf+PAmFe.surf+PAmNi.surf+PCrysFe.surf+
+         PCrysNi.surf+POxidMn.surf+Nit.surf+Car.surf,data=benthos.chem.rda.allrefs.hel)
+
+# Sed Deep
+adonis(benthos.chem.rda.allrefs.hel[,56:93]~TotalNi.deep+TotalFe.deep+TotalMn.deep+
+         AVS.deep+PSEMFe.deep+PSEMMn.deep+PSEMNi.deep+PAmFe.deep+PAmNi.deep+PCrysFe.deep+
+         PCrysNi.deep+POxidMn.deep+Nit.deep+Car.deep,data=benthos.chem.rda.allrefs.hel)
+
+# water
+adonis(benthos.chem.rda.allrefs.hel[,56:93]~SO4+Ni+Cond+pH+Chl+Ni,data=benthos.chem.rda.allrefs.hel)
+
+write.table(inv_simp,pipe("pbcopy"),sep="\t",row.names=F)
+
+# With invert data
+thomp <- read.csv(file="thomp_chem_allrefs_invert.csv")
+summary(thomp)
+thomp$Site <- as.factor(thomp$Site)
+thomp$REL_EPH <- thomp$EPH/thomp$TOT_AB
+thomp$AVSASC.surf = (thomp$SEMNi.surf-thomp$ASCNi.surf)/58.69-thomp$AVS.surf
+
+WeirE <- subset(thomp,(thomp$Location=="Weir"&thomp$Effluent=="Exposure"))
+WeirR <- subset(thomp,(thomp$Location=="Weir"&thomp$Effluent!="Reference"))
+BirchE <- subset(thomp,(thomp$Location!="Weir"&thomp$Effluent=="Exposure"))
+BirchR <- subset(thomp,(thomp$Location!="Weir"&thomp$Effluent!="Reference"))
+
+par(pin=c(3,3))
+plot(WeirE[order(WeirE$Cond),]$SEMAVS.surf,las=1,xlab="",col="firebrick4",cex=1.5,lwd=2)
+points(WeirE[order(WeirE$Cond),]$EPH,las=1,xlab="",col="firebrick4",cex=1.5,lwd=2)
+plot(ASCNi.surf/SEMNi.surf~1,data=WeirE[order(WeirE$Cond),],las=1,xlab="",col="firebrick4",cex=1.5,lwd=2)
+
+## TOTAL Ni
+par(pin=c(3,3))
+plot(BirchE[order(BirchE$Cond),]$SEMNi.deep,ylim=c(0,500),las=1,ylab="Total Ni (mg/kg)",xlab="",col="firebrick",cex=1.5,lwd=2)
+points(WeirR[order(WeirR$Cond),]$SEMNi.deep,pch=16,cex=1.5,lwd=2,col="green4")
+text(7,450,"Exposure",col="firebrick")
+text(4,10,"Reference",col="green4")
+
+## SEM-AVS
+par(pin=c(3,3))
+plot(BirchE[order(BirchE$Cond),]$SEMAVS.deep,las=1,cex=1.5,lwd=2,pch=16,ylab="SEM Ni - AVS (µmol/g)",xlab="")
+points(BirchE[order(BirchE$Cond),]$SEMAVS.surf,cex=1.5,lwd=2)
+legend(0.5,-1.5,legend=c("Surface (0-2)","Deep (2-4)"),pch=c(1,16),bty="n")
+
+## Reference site means
+WRmean <- colMeans(WeirR[,5:34],na.rm=T)
+WRsd <- apply(WeirR[,6:32],2,sd,na.rm=T)
+BRmean <- colMeans(BirchR[,6:32],na.rm=T)
+BRsd <- apply(BirchR[,6:32],2,sd,na.rm=T)
+names(WRmean)
+
+WRmean[26]
+plot(REL_EPH~SEMAVS.surf,data=WeirE,las=1,cex=2,lwd=2,log="x",xlim=c(0.5,10))
+RE_WS <- lm(REL_EPH~log10(SEMAVS.surf),data=BirchE)
+summary(RE_WS)
+abline(RE_WS)
+exp(((WRmean[26]*.9)-RE_WS$coef[1])/RE_WS$coef[2])
+#SEM-AVS thresholds for EC10 compared to reference site
+#Birch surface <- 1.0; Birch deep <- 0.7; Weir surface <- 3.3; Weir deep <- 2.8 µmol/g
+
+plot(REL_EPH~log10(TotalNi.deep),data=WeirE)
+RE_TN <- lm(REL_EPH~log10(TotalNi.surf),data=WeirE)
+summary(RE_TN)
+abline(RE_TN)
+10^(((WRmean[26]*.9)-RE_TN$coef[1])/RE_TN$coef[2])
+#Total Ni thresholds for EC10 compared to reference site
+#Birch surface <- 121 mg/kg; Birch deep <- 121; Weir surface <- 248; Weir deep <- 252 mg/kg
+
+
+points(WRmean[23],WRmean[26],pch=16,col="green4",cex=2)
+arrows(WRmean[23],WRmean[26]+WRsd[26],WRmean[23],WRmean[26]-WRsd[26],angle=90,lwd=2,col="green4",length=0.05,code=3)
+arrows(WRmean[23]+WRsd[23],WRmean[26],WRmean[23]-WRsd[23],WRmean[26],angle=90,lwd=2,col="green4",length=0.05,code=3)
+
+plot(REL_EPH~SEDC.deep,data=BirchE,las=1,cex=2,lwd=2)
+points(BRmean[12],BRmean[4]/BRmean[1],pch=16,col="green4",cex=2)
+arrows(BRmean[21],BRmean[4]+BRsd[4],BRmean[21],BRmean[4]-BRsd[4],angle=90,lwd=2,col="green4",length=0.05,code=3)
+arrows(BRmean[21]+BRsd[21],BRmean[4],BRmean[21]-BRsd[21],BRmean[4],angle=90,lwd=2,col="green4",length=0.05,code=3)
+
+plot(REL_EPH~TotalNi.surf,data=BirchE)
+names(BirchE)
+WeirE[1,]

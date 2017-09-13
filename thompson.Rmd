@@ -4,7 +4,7 @@ author: "Raissa Mendonca"
 output: html_document
 ---
 
-Project: Thompson and Birchtree mines, Thompson, MB, Canada (NiPERA, Univ. of Michigan)
+Project: Thompson and Birchtree mines, Thompson, MB, Canada (Kent State University, NiPERA, Univ. of Michigan)
 
 Samples collected for surface water, sediment and benthic invertebrates at each sampling site. Sediment and surface water samples collected in 4 sites in reference tributaries and 10 in exposure tributaries at both mine sites. Invertebrate samples collected in 10 sites in both reference and exposure tributaries at both mine sites.
 
@@ -49,6 +49,12 @@ chem.inv <- read.csv(file="thomp_chem_inverts.csv") # Chem variables .surf and .
   chem.inv <- cbind(chem.inv[,1:65],allrefs$Ni.Fe,chem.inv[,66:105])
   names(chem.inv)[66] <- "Ni.Fe"
   chem.inv$REL_EPH <- chem.inv$REL_EPH*100
+chem.inv.exp <- subset(chem.inv,Effluent=="Exposure")
+  chem.inv.exp$NiSEMHFO <- thomp.exp$NiSEMHFO
+  chem.inv.exp$NiSEMDIT <- thomp.exp$NiSEMDIT
+  chem.inv.exp$NiSEMHFOfOC <- thomp.exp$NiSEMHFOfOC
+  chem.inv.exp$SEMAVSfOC.avg <- thomp.exp$SEMAVSfOC.avg  
+  
   REL_EPH.avg <- with(chem.inv,tapply(REL_EPH,list(chem.inv$Effluent),mean))
   #REL_EPH.exp <- mean(chem.inv.exp[c(3,4,7,14,19,20),"REL_EPH"])  #Mean EPH rel abund. in exp sites closest to the mouth of the tributary ("less contaminated")
     REL_EPH.exp <- 43 #Eph rel abund at BE4 and WE10, only two exp sites within mean +/- s.d. or s.e. of background [Ni] (mean at ref sites); both sites had same Eph rel abund of 0.43
@@ -56,12 +62,6 @@ chem.inv <- read.csv(file="thomp_chem_inverts.csv") # Chem variables .surf and .
     REL_EPH.WE <- mean(chem.inv.exp[c(14,19,20),"REL_EPH"])
   chem.inv$SEMAVSfOC.surf[chem.inv$SEMAVSfOC.surf<0] <- 15
   chem.inv$SEMAVS.surf[chem.inv$SEMAVS.surf<0] <- 0.320
-  
-chem.inv.exp <- subset(chem.inv,Effluent=="Exposure")
-  chem.inv.exp$NiSEMHFO <- thomp.exp$NiSEMHFO
-  chem.inv.exp$NiSEMDIT <- thomp.exp$NiSEMDIT
-  chem.inv.exp$NiSEMHFOfOC <- thomp.exp$NiSEMHFOfOC
-  chem.inv.exp$SEMAVSfOC.avg <- thomp.exp$SEMAVSfOC.avg
     
 benthos <- read.csv(file="thomp_benthos.csv") # Only benthic inverts (excluded cladocera, water mites and fish)
   benthos$OL <- NULL
@@ -180,6 +180,14 @@ logaxis <- function(minlog,maxlog,side){
   pow <- seq(minlog,maxlog,by=1)
   ticksat <- as.vector(sapply(pow, function(p) (1:10)*10^p))
   axis(side, 10^pow,las=3, cex.axis=0.75,labels=NA)
+  axis(side, ticksat, labels=NA, tcl=-0.25, lwd=0, lwd.ticks=1)
+}
+
+# Graphing function: log axis
+logaxis <- function(minlog,maxlog,side){
+  pow <- seq(minlog,maxlog,by=1)
+  ticksat <- as.vector(sapply(pow, function(p) (1:10)*10^p))
+  axis(side, 10^pow,las=1)
   axis(side, ticksat, labels=NA, tcl=-0.25, lwd=0, lwd.ticks=1)
 }
 ```

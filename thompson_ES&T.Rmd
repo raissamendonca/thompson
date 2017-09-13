@@ -1,0 +1,429 @@
+---
+title: "thompson_ES&T"
+author: "Raissa Mendonca"
+date: "9/13/2017"
+output: html_document
+---
+
+Project: Thompson and Birchtree mines, Thompson, MB, Canada (Kent State University, NiPERA, Univ. of Michigan)
+
+Samples collected for surface water, sediment and benthic invertebrates at each sampling site. Sediment and surface water samples collected in 4 sites in reference tributaries and 10 in exposure tributaries at both mine sites. Invertebrate samples collected in 10 sites in both reference and exposure tributaries at both mine sites.
+
+##Reviewer's comments from ES&T
+
+  1. Correlations between water chemistry and sediment geochemistry for SI
+  2. Relationships between relative abundances and chemistry variables for SI
+  3. RDA including Conductivity + pH + TOTNi + FeHFO in one model
+  4. SEM-AVS/ƒOC EC10 with and without the outliers (SEM<AVS)
+  5. Identify SEM-AVS/ƒOC outliers on all 3 concentration-response graphs
+  6. Compare concentration-response relationships between EPH and TAL
+  7. Sigmoid concentration-response model (code from 'compiled_R_tips.Rmd')
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = TRUE)
+options(device=quartz)
+#options(device="RStudioGD")
+par(pin=c(2.5,2.5),las=1)
+```
+
+```{r Load datasets, include=F}
+setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/Thompson/R Directory")
+library(vegan)
+library(FSA)
+
+thomp <- read.csv(file="thomp_chem.csv") # Chem variables NOT separated in .surf and .deep
+  thomp$Site <- as.factor(thomp$Site)
+  thomp$Depth <- factor(thomp$Depth,levels=c("Surface","Deep"),ordered=T)
+  thomp$SEMAVS <- (thomp$SEMNi/58.69)-thomp$AVS
+  thomp$SEMAVSfOC <- ((thomp$SEMNi/58.69)-thomp$AVS)/(thomp$C/100) # Org C corrected
+  thomp$SEMAVSfOC[thomp$SEMAVSfOC<0] <- 15 #Set neg. values as minimum SEM-AVS/fOC at all Exp sites (similar in Birch/Weir)
+  thomp$C[c(30,36)] <- NA # Outliers (not good numbers, take out from all analyses)
+  thomp$C.avg <- c(rep((mean(thomp$C[1:14])),times=14),rep((mean(thomp$C[15:28])),times=14))
+  names(thomp)
+
+geochem <- read.csv(file="thomp_chem_surfdeep.csv") # Chem variables .surf and .deep, only 4 ref values
+
+allrefs <- read.csv(file="thomp_chem_allrefs.csv") # Chem variables .surf and .deep, ref values are averages
+  allrefs$SEMAVSfOC.surf[ allrefs$SEMAVSfOC.surf<0] <- 15 # Make all values min positive value from exposure sites
+  allrefs$SEMAVS.surf[ allrefs$SEMAVS.surf<0] <- 0.320 # Make all values min positive value from exposure sites
+  allrefs$Ni.Fe <- allrefs$TotalNi.surf-allrefs$ASCNi.surf # Variable of Ni corrected for Fe, i.e., portion of total nickel not bound to oxides
+  
+thomp.exp <- subset(allrefs,Effluent=="Exposure") # Chem variables .surf and .deep, thomp.exp only
+  thomp.exp$C.avg <- c(rep((mean(thomp.exp$C.surf[1:10])),times=10),rep((mean(thomp.exp$C.surf[11:20])),times=10))
+  thomp.exp$NiSEMHFO <- thomp.exp$SEMNi.surf-thomp.exp$ASCNi.surf
+  thomp.exp$NiSEMDIT <- thomp.exp$SEMNi.surf-thomp.exp$DITNi.surf
+  thomp.exp$NiSEMHFOfOC <- (thomp.exp$SEMNi.surf-thomp.exp$ASCNi.surf)/(thomp.exp$C.avg/100)
+  thomp.exp$SEMAVSfOC.avg = ((thomp.exp$SEMNi.surf/58.69)-thomp.exp$AVS.surf)/(thomp.exp$C.avg/100) # Org C corrected
+  thomp.exp$SEMAVSfOC.avg[thomp.exp$SEMAVSfOC.avg<0] = 7.130744 # Make all values > 0 to make graph on log scale; 7.130744 is min positive value from exposure sites
+
+chem.inv <- read.csv(file="thomp_chem_inverts.csv") # Chem variables .surf and .deep, ref values are averages, TOT_AB = total abund, REL_EPH = Ephemeroptera rel abund
+  chem.inv$OL <- NULL
+  chem.inv$C.avg <- c(rep(thomp$C.avg[1],20),rep(thomp$C.avg[15],20))  
+  chem.inv <- cbind(chem.inv[,1:65],allrefs$Ni.Fe,chem.inv[,66:106])
+  names(chem.inv)[66] <- "Ni.Fe"
+  chem.inv$REL_EPH <- chem.inv$REL_EPH*100
+  chem.inv$SEMAVSfOC.avg <- ((chem.inv$SEMNi.surf/58.69)-chem.inv$AVS.surf)/(chem.inv$C.avg/100)
+  chem.inv$SEMAVSfOC.avg[chem.inv$SEMAVSfOC.avg<0] = 4.898928 # Make all values > 0 to make graph on log scale; 4.898928 is min positive value from ref and exp sites
+  chem.inv$NiSEMHFOfOC <- (chem.inv$SEMNi.surf-chem.inv$ASCNi.surf)/(chem.inv$C.avg/100)
+chem.inv.exp <- subset(chem.inv,Effluent=="Exposure")
+  chem.inv.exp$NiSEMHFO <- thomp.exp$NiSEMHFO
+  chem.inv.exp$NiSEMDIT <- thomp.exp$NiSEMDIT
+  chem.inv.exp$NiSEMHFOfOC <- thomp.exp$NiSEMHFOfOC
+  chem.inv.exp$SEMAVSfOC.avg <- thomp.exp$SEMAVSfOC.avg  
+  
+  REL_EPH.avg <- with(chem.inv,tapply(REL_EPH,list(chem.inv$Effluent),mean))
+  #REL_EPH.exp <- mean(chem.inv.exp[c(3,4,7,14,19,20),"REL_EPH"])  #Mean EPH rel abund. in exp sites closest to the mouth of the tributary ("less contaminated")
+    REL_EPH.exp <- 43 #Eph rel abund at BE4 and WE10, only two exp sites within mean +/- s.d. or s.e. of background [Ni] (mean at ref sites); both sites had same Eph rel abund of 0.43
+    REL_EPH.BE <- mean(chem.inv.exp[c(3,4,7),"REL_EPH"])
+    REL_EPH.WE <- mean(chem.inv.exp[c(14,19,20),"REL_EPH"])
+  chem.inv$SEMAVSfOC.surf[chem.inv$SEMAVSfOC.surf<0] <- 15
+  chem.inv$SEMAVS.surf[chem.inv$SEMAVS.surf<0] <- 0.320
+    
+benthos <- read.csv(file="thomp_benthos.csv") # Only benthic inverts (excluded cladocera, water mites and fish)
+  benthos$OL <- NULL
+benthos.exp <- benthos[c(11:20,31:40),]
+  
+arealdens <- read.csv(file="thomp_arealdensity.csv") # Invert areal density (#/m2)
+arealdens$OL <- NULL
+
+biomass <- read.csv(file="thomp_hexbiomass.csv")
+biomass$Site <- as.factor(biomass$Site)
+biomass[24,] = NA
+summary(biomass)
+```
+
+```{r Subsets and kd, include=F}
+Birch <- subset(thomp,thomp$Location=="Birchtree")
+Weir <- subset(thomp,thomp$Location=="Weir")
+BR <- subset(Birch,Birch$Effluent=="Reference")
+WR <- subset(Weir,Weir$Effluent=="Reference")
+BE <- subset(Birch,Birch$Effluent=="Exposure")
+WE <- subset(Weir,Weir$Effluent=="Exposure")
+
+surf <- subset(thomp[,c(1:31,41:42)],thomp$Depth=="Surface") # Surface sediment variables
+deep <- subset(thomp[,c(1:31,41:42)],thomp$Depth=="Deep") # Deep sediment variables
+water <- thomp[c(1:28),c(1:4,32:40)] # water related variables
+
+birch.kd <- mean(log10(((surf$TotalNi[surf$Location=="Birchtree"])*1000)/water$Ni[water$Location=="Birchtree"]))
+weir.kd <- mean(log10(((surf$TotalNi[surf$Location=="Weir"])*1000)/water$Ni[water$Location=="Weir"]))
+
+BE.kd <- mean(log10(((BE$TotalNi[BE$Depth=="Surface"])*1000)/BE$Ni[BE$Depth=="Surface"]))
+WE.kd <- mean(log10(((WE$TotalNi[WE$Depth=="Surface"])*1000)/WE$Ni[WE$Depth=="Surface"]))
+```
+
+```{r Log axis function, include=F}
+# Graphing function: log axis
+logaxis <- function(minlog,maxlog,side){
+  pow <- seq(minlog,maxlog,by=1)
+  ticksat <- as.vector(sapply(pow, function(p) (1:10)*10^p))
+  axis(side, 10^pow,las=1)
+  axis(side, ticksat, labels=NA, tcl=-0.25, lwd=0, lwd.ticks=1)
+}
+```
+
+```{r ECXXcalc, include=F}
+ECXX=function(model,percent){
+  ECname = paste("EC",percent)
+  dose=names(model$dataClasses)
+  EC = (100-percent)/100 
+  ref = model$m$getPar()[1]
+  min.x = 1
+  max.x = 10000 #Might need to change the range
+  range = seq(min.x,max.x,by=1)
+  new.range = data.frame(frame=seq(min.x,max.x,by=1))
+  names(new.range)[[1]]=dose
+  bf = predict(model,newdata=new.range)
+  locEC=which.min(abs(bf-ref*EC))
+  se = sqrt(apply(attr(predict(model, newdata=new.range),"gradient"),1,function(x) sum(vcov(model)*outer(x,x))))
+  LCI=bf+se*qnorm(0.025)
+  locL=which.min(abs(LCI-ref*EC))
+  UCI=bf+se*qnorm(0.975)
+  locU=which.min(abs(UCI-ref*EC))
+  result=c(range[locEC],range[locL],range[locU])
+  result = signif(result,digits=3)
+  names(result)[[1]]=ECname
+  names(result)[[2]]="Lower-bound (2.5%)"
+  names(result)[[3]]="Upper-bound (97.5%)"
+  print(result)
+  mat=cbind(new.range,bf,LCI,UCI)
+  invisible(list(ResultTable=result,CImat=mat))
+  	}
+```
+
+```{r ANOVA eq, include=F}
+  #Get ANOVA results for full equation model
+ANOVA_F=function(mod,y){
+	ypred=predict(mod)
+  y.no.na = y[!is.na(y)]
+  dfnum = length(mod$m$getPar())-1
+  dfden = length(y.no.na)-length(mod$m$getPar())
+  SSerr=sum((ypred-y.no.na)^2)
+	SSreg=sum((ypred-mean(y.no.na))^2)
+	SStot = SSerr + SSreg
+  Frat = (SSreg/dfnum)/(SSerr/dfden)
+  probF = pf(Frat,dfnum,dfden,lower.tail=F)
+  Rsquare = 1-(SSerr/SStot)
+  result=c(Frat,probF,Rsquare)
+  names(result)[[1]]="F ratio"
+	names(result)[[2]]="P-value"
+  names(result)[[3]]="R-squared"
+  return(result)
+}
+
+```
+_____
+
+####1. WATER-SED correlations
+```{r 1. WATER-SED correlations, echo=F}
+
+```
+_____
+
+####2. REL_ABUND-CHEM correlations
+```{r 2. REL_ABUND-CHEM correlations, echo=F}
+
+```
+_____
+
+####3. WATER+SED RDA model
+```{r 3. WATER+SED RDA model, echo=F}
+
+```
+_____
+
+####4. SEM-AVS model w/o 'outliers'
+
+Removed BE2 and WE2 data points which were <0 and calculated EC10 and EC20 for the data without the outliers. ECXX were well below the 130 umol/g benchmark (USEPA 2005).
+
+```{r 4. SEM-AVS model w/ and w/o outliers, echo=F, fig.align='center',tidy=TRUE, results="hide"}
+par(pin=c(1.5,3))
+
+##SEM-AVS/ƒOC (avg)
+plot(REL_EPH~SEMAVSfOC.avg, data=chem.inv.exp[c(1,3:11,13:20),],log="x",pch=c(rep(16,9),rep(1,9)),lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(5,1000),col=c(rep("tan1",9),rep("dodgerblue4",9)),
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),
+     ylab="",yaxt="n", xaxt="n")
+logaxis(1,3,1)
+axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
+
+abline(lm(REL_EPH[c(1,3:10)]~log10(SEMAVSfOC.avg[c(1,3:10)]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[c(11,13:20)]~log10(SEMAVSfOC.avg[c(11,13:20)]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+#plot(REL_EPH~log(SEMAVSfOC.avg), data=chem.inv.exp[c(1,3:11,13:20),],col=as.numeric(as.factor(Location)))
+AVSOCmod <- lm(REL_EPH~log(SEMAVSfOC.avg)*Location, data=chem.inv.exp[c(1,3:11,13:20),])
+summary.aov(AVSOCmod)
+
+AVSOCW <- lm(REL_EPH~log(SEMAVSfOC.avg),data=chem.inv.exp[c(11,13:20),])
+summary(AVSOCW)
+#abline(AVSOCW,col=2)
+exp(((REL_EPH.exp*.9)-AVSOCW$coef[1])/AVSOCW$coef[2])
+  #Weir EC10 <- 69 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.avg[2]
+  #Weir EC10 <- 89 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp
+  #Weir EC10 <- 11 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+  #Weir EC20 <- 15 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+
+AVSOCB <- lm(REL_EPH~log(SEMAVSfOC.avg),data=chem.inv.exp[c(1,3:10),])
+summary(AVSOCB)
+#abline(AVSOCB)
+exp(((REL_EPH.exp*.9)-AVSOCB$coef[1])/AVSOCB$coef[2])
+  #Birchtree EC10 <- 33 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.avg[2]
+  #Birchtree EC10 <- 39 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp
+  #Birchtree EC10 <- 9 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+  #Birchtree EC20 <- 12 umol/g dw SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+
+abs(69-33)/mean(c(69,33)) #RD.avg <- 71%
+abs(89-39)/mean(c(89,39)) #RD.exp <- 78%
+abs(11-9)/mean(c(11,9)) #RD.exp(43) <- 20%
+abs(15-12)/mean(c(15,12)) #RD.EC20.exp(43) <- 22%
+
+```
+
+|Model|EC20|RD.EC20|EC10|RD.EC10|
+|:-:|:-:|:-:|:-:|:-:|
+|Birchtree|12 umol/g|0.22|9 umol/g|0.20|
+|Thompson|15 umol/g| |11 umol/g| |
+_____
+
+####5. SEM-AVS outliers on all CR graphs
+
+```{r 5. SEM-AVS outliers on all CR graphs, echo=F, fig.align='center',tidy=TRUE}
+par(pin=c(1.5,3))
+
+
+  ##SEM Ni
+plot(REL_EPH~SEMNi.surf, data=chem.inv.exp[c(1,3:11,13:20),],log="x",pch=c(rep(16,9),rep(1,9)),lwd=3,las=1,cex=1.5,
+     ylim=c(0,50), xlim=c(10,1000),col=c(rep("tan1",9),rep("dodgerblue4",9)),
+     xlab=expression(paste("Ni"[SEM]*" (mg kg"^"-1",")")),ylab="Ephemeridae abundance (%)",xaxt="n")
+logaxis(1,3,1)
+points(227.12,14,pch=3,lwd=3,col="tan1") #Birchtree data point that was negative before conversion to min value (BE2)
+points(227.68,3,pch=3,lwd=3,col="dodgerblue4") #Weir data point that was negative before conversion to min value (WE2)
+
+abline(lm(REL_EPH[1:10]~log10(SEMNi.surf[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(SEMNi.surf[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+
+  ##SEM-AVS/ƒOC (avg)
+plot(REL_EPH~SEMAVSfOC.avg, data=chem.inv.exp[c(1,3:11,13:20),],log="x",pch=c(rep(16,9),rep(1,9)),lwd=3,las=1,cex=1.5,
+     ylim=c(0,50),xlim=c(5,1000),col=c(rep("tan1",9),rep("dodgerblue4",9)),
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),
+     ylab="",yaxt="n", xaxt="n")
+logaxis(1,3,1)
+axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
+points(7.130744,14,pch=3,lwd=3,col="tan1") #Birchtree data point that was negative before conversion to min value (BE2)
+points(7.130744,3,pch=3,lwd=3,col="dodgerblue4") #Weir data point that was negative before conversion to min value (WE2)
+
+abline(lm(REL_EPH[1:10]~log10(SEMAVSfOC.avg[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(SEMAVSfOC.avg[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+
+  ##SEM-HFO/ƒOC (avg)
+plot(REL_EPH~NiSEMHFOfOC, data=chem.inv.exp[c(1,3:11,13:20),],pch=c(rep(16,9),rep(1,9)),log="x",lwd=3,las=1,cex=1.5,
+     col=c(rep("tan1",9),rep("dodgerblue4",9)), xlim=c(100,10000), ylim=c(0,50),
+     xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (mg kg"^"-1",")")),
+     ylab="",yaxt="n",xaxt="n")
+axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
+logaxis(2,4,1)
+points(3648.7933,14,pch=3,lwd=3,col="tan1") #Birchtree data point that was negative before conversion to min value (BE2)
+points(2562.9642,3,pch=3,lwd=3,col="dodgerblue4") #Weir data point that was negative before conversion to min value (WE2)
+
+abline(lm(REL_EPH[1:10]~log10(NiSEMHFOfOC[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+abline(lm(REL_EPH[11:20]~log10(NiSEMHFOfOC[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+
+par(xpd=T)
+legend(15000,52,"Birchtree",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5,cex=0.8)
+legend(15000,48.5,"Thompson",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5,cex=0.8)
+par(xpd=F)
+```
+
+_____
+
+####6. CRM EPH vs. TAL
+```{r 6. CRM EPH vs. TAL, echo=F}
+
+```
+_____
+
+####7. Sigmoid CRM
+```{r 7. Sigmoid CRM, echo=F, fig.align='center',tidy=T}
+par(pin=c(3,3))
+
+
+##TOTAL Ni SURFACE
+
+plot(REL_EPH~TotalNi.surf,log="x",data=chem.inv[1:20,], xlim=c(40,600), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Ephemeridae relative abundance (%)") 
+      #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_EPH~TotalNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_EPH~a/(1+10^(2*b*(log10(TotalNi.surf)-c))),start=list(a=50,b=1,c=1.5),data=chem.inv)
+CRMNi=seq(0.01,3,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(TotalNi.surf=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
+
+  #Standard error for all predicted values
+#se.pred = sqrt(apply(attr(predict(CRM, data.frame(TotalNi.surf=CRMNi)),"gradient"),1,function(x) sum(vcov(CRM)*outer(x,x))))
+  #Lower bound of 95% confidence intervals (2.5%)
+#low.CI=CRMy+se.pred*qnorm(0.025)
+  #Upper bound of 95% confidence intervals (97.5%)
+#up.CI=CRMy+se.pred*qnorm(0.975)
+
+#lines(CRMNi,CRMy,lwd=3,col="red")
+#lines(CRMNi,low.CI,lwd=2,lty=2)
+#lines(CRMNi,up.CI,lwd=2,lty=2)
+
+CRM=nls(REL_EPH~SSlogis(log10(TotalNi.surf),Asym,xmid,scal),data=chem.inv)
+summary(CRM) #EC20 = 151.4 mg/kg Total Ni
+
+ANOVA_F(CRM,chem.inv$REL_EPH)
+
+#Set the reference growth rate
+ref = CRM$m$getPar()[1]
+  #For EC20
+CRM.EC20=which.min(abs(CRMy-ref*0.8))
+(EC20 = CRMNi[CRM.EC20])
+ECXX(CRM,20)
+
+
+##SEM Ni
+
+plot(REL_EPH~SEMNi.surf,log="x",data=chem.inv[1:20,],cex=1.5, xlim=c(15,510), ylim=c(0,45), col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[SEM]*" (mg kg"^"-1",")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_EPH~SEMNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_EPH~a/(1+10^(1.5*b*(log10(SEMNi.surf)-c))),start=list(a=50,b=10,c=2),data=chem.inv)
+CRMNi=seq(0.01,3,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(SEMNi.surf=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
+
+CRM=nls(REL_EPH~SSlogis(log10(SEMNi.surf),Asym,xmid,scal),data=chem.inv)
+summary(CRM) #EC20 = 87.1 mg/kg SEM Ni
+
+ANOVA_F(CRM,chem.inv$REL_EPH)
+
+#Set the reference growth rate
+ref = CRM$m$getPar()[1]
+  #For EC20
+CRM.EC20=which.min(abs(CRMy-ref*0.8))
+(EC20 = CRMNi[CRM.EC20])
+ECXX(CRM,20)
+
+
+##SEM-AVS/ƒOC (C.avg) // (SEM-AVS corrected for average C from reference and exposure surface sediment)
+
+plot(REL_EPH~SEMAVSfOC.avg,log="x",data=chem.inv[1:20,], xlim=c(5,120), ylim=c(0,45),cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_EPH~SEMAVSfOC.avg,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_EPH~a/(1+10^(2*b*(log10(SEMAVSfOC.avg)-c))),start=list(a=50,b=1,c=2),data=chem.inv)
+CRMNi=seq(0.01,3,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(SEMAVSfOC.avg=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
+
+CRM=nls(REL_EPH~SSlogis(log10(SEMAVSfOC.avg),Asym,xmid,scal),data=chem.inv)
+summary(CRM) #EC20 = 26.9 umol/g SEM-AVS/ƒOC (avg)
+
+ANOVA_F(CRM,chem.inv$REL_EPH)
+
+#Set the reference growth rate
+ref = CRM$m$getPar()[1]
+  #For EC20
+CRM.EC20=which.min(abs(CRMy-ref*0.8))
+(EC20 = CRMNi[CRM.EC20])
+ECXX(CRM,20)
+
+
+##SEM Ni-HFO/ƒOC
+
+plot(REL_EPH~NiSEMHFOfOC,log="x",data=chem.inv[1:20,],xlim=c(150,5000), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (mg kg"^"-1",")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_EPH~NiSEMHFOfOC,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_EPH~a/(1+10^(3*b*(log10(NiSEMHFOfOC)-c))),start=list(a=50,b=10,c=3.5),data=chem.inv)
+CRMNi=seq(0.01,4,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(NiSEMHFOfOC=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
+
+CRM=nls(REL_EPH~SSlogis(log10(NiSEMHFOfOC),Asym,xmid,scal),data=chem.inv)
+summary(CRM) #EC20 = 891.3 mg/kg SEM-HFO/ƒOC (avg)
+
+ANOVA_F(CRM,chem.inv$REL_EPH)
+
+  #Set the reference growth rate
+ref = CRM$m$getPar()[1]
+  #For EC20
+CRM.EC20=which.min(abs(CRMy-ref*0.8))
+(EC20 = CRMNi[CRM.EC20])
+ECXX(CRM,20)
+```

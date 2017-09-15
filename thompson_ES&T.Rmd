@@ -724,5 +724,3 @@ CRM.EC20=which.min(abs(CRMy-ref*0.8))
 (EC20 = CRMNi[CRM.EC20])
 ECXX(CRM,20)
 ```
-
-####8. EC20s for 

@@ -174,26 +174,179 @@ ANOVA_F=function(mod,y){
 _____
 
 ####1. WATER-SED correlations
+
+  a. Table of correlation coefficients between surface (rows 1-15) and deep (rows 16-30) sediment variables and water chemistry variables || Bold green cells represent significant correlations
+  b. Table of correlation coefficients between surface sediment variables || Bold green cells represent significant correlations
+  c. Table of correlation coefficients between water chemistry variables || Bold green cells represent significant correlations
+  
 ```{r 1. WATER-SED correlations, echo=F}
+library('formattable')
+  p_bold <- formatter("span", style = x ~ style("font-weight" = ifelse(x < 0.05, "bold", NA)))
+  
+  
+surf = surf[,c(6:18,21,22)]
+deep = deep[,c(6:18,21,22)]
+water = water [,5:12]
+
+##Set up matrices
+watersurf.cor <- matrix(data=NA,ncol=8,nrow=15,dimnames=list(colnames(surf),colnames(water)))
+watersurf.p <- matrix(data=NA,ncol=8,nrow=15,dimnames=list(colnames(surf),colnames(water)))
+waterdeep.cor <- matrix(data=NA,ncol=8,nrow=15,dimnames=list(colnames(deep),colnames(water)))
+waterdeep.p <- matrix(data=NA,ncol=8,nrow=15,dimnames=list(colnames(surf),colnames(water)))
+
+##Water-surf sed. correlations loop
+for(i in 1:ncol(surf)) {
+  for(j in 1:ncol(water)) {
+    cor <- cor.test(surf[,i],water[,j])
+    watersurf.cor[i,j] = signif(cor$estimate,3)
+    watersurf.p[i,j] = signif(cor$p.value,3)
+  }
+}
+
+##Water-deep sed. correlations loop
+for(i in 1:ncol(deep)) {
+  for(j in 1:ncol(water)) {
+    cor <- cor.test(deep[,i],water[,j])
+    waterdeep.cor[i,j] = signif(cor$estimate,3)
+    waterdeep.p[i,j] = signif(cor$p.value,3)
+  }
+}
+
+watersed.cor = rbind(watersurf.cor,waterdeep.cor)
+watersed.p = rbind(watersurf.p,waterdeep.p)
+
+
+  ##P-values for water-sed correlations
+  #formattable(as.data.frame(watersed.p, check.names=F), list(~ p_bold))
+
+  ##Signif coef for water-sed correlations
+  highcor <- formatter("span",style = x ~ style(color = ifelse(watersed.p < 0.05, "green", "black"),
+                                                "font-weight" = ifelse(watersed.p < 0.05, "bold", NA)))  
+  formattable(as.data.frame(watersed.cor, check.names=F), list(~ highcor))
+
+##Set up matrices
+surf.cor <- matrix(data=NA,ncol=15,nrow=15,dimnames=list(colnames(surf),colnames(surf)))
+surf.p <-   matrix(data=NA,ncol=15,nrow=15,dimnames=list(colnames(surf),colnames(surf)))
+water.cor <- matrix(data=NA,ncol=8,nrow=8,dimnames=list(colnames(water),colnames(water)))
+water.p <-   matrix(data=NA,ncol=8,nrow=8,dimnames=list(colnames(water),colnames(water)))
+
+##Surf-surf correlations loop
+for(i in 1:ncol(surf)) {
+  for(j in 1:ncol(surf)) {
+    cor <- cor.test(surf[,i],surf[,j])
+    surf.cor[i,j] = signif(cor$estimate,3)
+    surf.p[i,j] = signif(cor$p.value,1)
+  }
+}
+
+##Water-water correlations loop
+for(i in 1:ncol(water)) {
+  for(j in 1:ncol(water)) {
+    cor <- cor.test(water[,i],water[,j])
+    water.cor[i,j] = signif(cor$estimate,3)
+    water.p[i,j] = signif(cor$p.value,3)
+  }
+}
+
+  #P-values for surf-surf correlations
+  #formattable(as.data.frame(surf.p, check.names=F), list(~ p_bold))
+
+  #Coef for surf-surf correlations
+  highcor <- formatter("span",style = x ~ style(color = ifelse(surf.p < 0.05, "green", "black"),
+                                                "font-weight" = ifelse(surf.p < 0.05, "bold", NA)))
+  formattable(as.data.frame(surf.cor, check.names=F), list(~ highcor))
+
+  #P-values for water-water correlations
+  #formattable(as.data.frame(water.p, check.names=F), list(~ p_bold))
+
+  #Coef for water-water correlations
+  highcor <- formatter("span",style = x ~ style(color = ifelse(water.p < 0.05, "green", "black"),
+                                                "font-weight" = ifelse(water.p < 0.05, "bold", NA)))
+  formattable(as.data.frame(water.cor, check.names=F), list(~ highcor))
 
 ```
 _____
 
 ####2. REL_ABUND-CHEM correlations
+
+  - Table of correlation coefficients between relative abundances and all physicochemical and geochemical variables
+  
 ```{r 2. REL_ABUND-CHEM correlations, echo=F}
+r_ab <- read.csv("thomp_relabund_C.csv") #Relative abundances of all families by site
+r_ab <- r_ab[,2:39]
+allrefs <- allrefs[,4:65]
+
+r_ab.cor <- matrix(data=NA,ncol=62,nrow=38,dimnames=list(colnames(r_ab),colnames(allrefs)))
+r_ab.p <- matrix(data=NA,ncol=62,nrow=38,dimnames=list(colnames(r_ab),colnames(allrefs)))
+
+
+##Rel. abund-chemistry correlations loop
+
+  #Cor values
+for(i in 1:ncol(r_ab)) {
+  for(j in 1:ncol(allrefs)) {
+    cor <- cor.test(r_ab[,i],allrefs[,j])
+    r_ab.cor[i,j] = signif(cor$estimate*10^2,2)
+  }
+}
+
+  #p-values
+for(i in 1:ncol(r_ab)) {
+  for(j in 1:ncol(allrefs)) {
+    cor <- cor.test(r_ab[,i],allrefs[,j])
+    r_ab.p[i,j] = signif(cor$p.value,3)
+  }
+}
+
+
+library('formattable')
+  #P-values for relabund-chem correlations
+  p_bold <- formatter("span", 
+  style = x ~ style("font-weight" = ifelse(x < 0.05, "bold", NA)))
+  #formattable(as.data.frame(r_ab.p, check.names=F), list(~ p_bold))
+
+  #Coef for relabund-chem correlations
+  highcor <- formatter("span", 
+  style = x ~ style(color = ifelse(r_ab.p < 0.05, "green", "black"),"font-weight" = ifelse(r_ab.p < 0.05, "bold", NA)))
+  formattable(as.data.frame(r_ab.cor, check.names=F), list(~ highcor))  
+  
 
 ```
 _____
 
 ####3. WATER+SED RDA model
-```{r 3. WATER+SED RDA model, echo=F}
 
+  - RDA model with forward-selected water and surface sediment variables. R squared increased ~5% and overall pattern is similar to separate models. 
+
+  - Different iterations of the full model (not shown: 1. All water variables + all surface sediment variables; 2. Conductivity + pH + all surface sediment variables) either did not significantly explain community variation (1. p = 0.15) or produced a parsimonious (post-forward stepping) model identical to RDA[SURF] (2).
+
+```{r 3. WATER+SED RDA model, echo=F, fig.align='center',tidy=TRUE}
+library(vegan)
+
+chem.inv.hel <- cbind(chem.inv[,1:65],decostand(chem.inv[,67:104],"hellinger"))
+inv.hel <- chem.inv.hel[,66:103]
+
+rda.water.sed=rda(chem.inv.hel[,66:103],chem.inv.hel[,c("TotalNi.surf","PAmFe.surf","Cond","pH")])
+  #anova(rda.water.sed)
+  #summary(rda.water.sed)
+  RsquareAdj(rda.water.sed)
+  good.watersed = signif((goodness(rda.water.sed))*100,3)
+
+library('formattable')  
+  highgood <- formatter("span", 
+  style = x ~ style(color = ifelse((x > 20), "green", "black"),"font-weight" = ifelse((x > 20), "bold", NA)))
+#formattable(as.data.frame(good.watersed, check.names=F), list(~ highgood))
+  
+par(pin=c(3,3))
+plot(rda.water.sed, choices = c(1,2))
+plot(rda.water.sed, choices = c(3,4))
 ```
+
 _____
 
 ####4. SEM-AVS model w/o 'outliers'
 
-Removed BE2 and WE2 data points which were <0 and calculated EC10 and EC20 for the data without the outliers. ECXX were well below the 130 umol/g benchmark (USEPA 2005).
+  - Removed BE2 and WE2 data points which were <0 and calculated EC10 and EC20 for the data without the outliers. ECXX were well below the 130 umol/g benchmark (USEPA 2005).
 
 ```{r 4. SEM-AVS model w/ and w/o outliers, echo=F, fig.align='center',tidy=TRUE, results="hide"}
 par(pin=c(1.5,3))
@@ -297,14 +450,88 @@ par(xpd=F)
 
 _____
 
-####6. CRM EPH vs. TAL
-```{r 6. CRM EPH vs. TAL, echo=F}
+####6. CRM TAL
 
+  - Cannot fit SSlogis function to any of the models
+  - Linear models all p ~ 1
+  - Reliable CRMs could not be developed for Talitridae
+  
+```{r 6. CRM TAL, echo=F, fig.align='center',tidy=T}
+chem.inv$REL_TAL <- round((benthos$TAL/rowSums(benthos[2:39]))*100)
+
+tal.ni <- lm(REL_TAL~log(TotalNi.surf),data=chem.inv) #Can also separate analysis by [1:20,] and [21:40,]
+  summary(tal.ni)
+
+tal.sem <- lm(REL_TAL~log(SEMNi.surf),data=chem.inv)
+  summary(tal.sem)
+
+tal.semavs <- lm(REL_TAL~log(SEMAVSfOC.avg),data=chem.inv)
+  summary(tal.semavs)
+
+tal.semhfo <- lm(REL_TAL~log(NiSEMHFOfOC),data=chem.inv)
+  summary(tal.semhfo)
+  #abline(tal.semhfo)
+
+
+par(pin=c(3,3))
+
+##TOTAL Ni SURFACE || Cannot fit sigmoid curve
+
+plot(REL_TAL~TotalNi.surf,log="x",data=chem.inv[1:20,], xlim=c(40,600), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Talitridae relative abundance (%)") 
+      #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_TAL~TotalNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_TAL~a/(1+10^(2*b*(log10(TotalNi.surf)-c))),start=list(a=50,b=2,c=3),data=chem.inv)
+CRMNi=seq(0.01,3,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(TotalNi.surf=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
+
+##SEM Ni || Cannot fit sigmoid curve
+
+plot(REL_TAL~SEMNi.surf,log="x",data=chem.inv[1:20,],cex=1.5, xlim=c(15,510), ylim=c(0,45), col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[SEM]*" (mg kg"^"-1",")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_TAL~SEMNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+
+##SEM-AVS/ƒOC (C.avg) || Model fit looks pretty awful
+
+plot(REL_TAL~SEMAVSfOC.avg,log="x",data=chem.inv[1:20,], xlim=c(5,120), ylim=c(0,45),cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_TAL~SEMAVSfOC.avg,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_TAL~a/(1+10^(4*b*(log10(SEMAVSfOC.avg)-c))),start=list(a=50,b=1,c=2),data=chem.inv)
+CRMNi=seq(0.01,3,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(SEMAVSfOC.avg=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
+
+
+##SEM Ni-HFO/ƒOC
+
+plot(REL_TAL~NiSEMHFOfOC,log="x",data=chem.inv[1:20,],xlim=c(150,5000), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (mg kg"^"-1",")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_TAL~NiSEMHFOfOC,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+
+legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
+
+CRM=nls(REL_TAL~a/(1+10^(3*b*(log10(NiSEMHFOfOC)-c))),start=list(a=50,b=10,c=3.5),data=chem.inv)
+CRMNi=seq(0.01,4,by=0.01)
+CRMNi=10^CRMNi
+CRMy=predict(CRM,list(NiSEMHFOfOC=CRMNi))
+lines(CRMNi,CRMy,lwd=3)
 ```
 _____
 
-####7. Sigmoid CRM
-```{r 7. Sigmoid CRM, echo=F, fig.align='center',tidy=T}
+####7. Sigmoid CRM EPH
+```{r 7. Sigmoid CRM EPH, echo=F, fig.align='center',tidy=T}
 par(pin=c(3,3))
 
 

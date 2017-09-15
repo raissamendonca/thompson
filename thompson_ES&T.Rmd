@@ -399,7 +399,7 @@ _____
 
 ####5. SEM-AVS outliers on all CR graphs
 
-```{r 5. SEM-AVS outliers on all CR graphs, echo=F, fig.align='center',tidy=TRUE}
+```{r 5. SEM-AVS outliers on all CR graphs, echo=F, fig.align='center',tidy=TRUE, results="hide"}
 par(pin=c(1.5,3))
 chem.inv.exp$SEMNi.surf.mol = chem.inv.exp$SEMNi.surf/58.69
 
@@ -446,7 +446,76 @@ par(xpd=T)
 legend(150,52,"Birchtree",col = "tan1",lty=3,lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5,cex=0.8)
 legend(150,48.5,"Thompson",col = "dodgerblue4",lty=1,lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5,cex=0.8)
 par(xpd=F)
+
+  
+  ##EC20s for all three regression models
+
+##SEMNi (molar)
+  SNW <- lm(REL_EPH~log(SEMNi.surf.mol),data=chem.inv.exp[11:20,])
+  summary(SNW)
+  exp(((REL_EPH.exp*.8)-SNW$coef[1])/SNW$coef[2])
+    #Weir EC20 <- 3.7 µmol/g SEMNi.surf.mol for REL_EPH.avg[2]
+    #Weir EC20 <- 4.5 µmol/g SEMNi.surf.mol for REL_EPH.exp
+    #Weir EC20 <- 0.8 µmol/g SEMNi.surf.mol for REL_EPH.exp(43)
+
+  SNB <- lm(REL_EPH[1:10]~log(SEMNi.surf.mol),data=chem.inv.exp[1:10,])
+  summary(SNB)
+  exp(((REL_EPH.exp*.8)-SNB$coef[1])/SNB$coef[2])
+    #Birchtree EC20 <- 1.9 µmol/g SEMNi.surf.mol for REL_EPH.avg[2]
+    #Birchtree EC20 <- 2.2 µmol/g SEMNi.surf.mol for REL_EPH.exp
+    #Bircthree EC20 <- 0.6 µmol/g SEMNi.surf.mol for REL_EPH.exp(43)
+
+  abs(3.7-1.9)/mean(c(3.7,1.9)) #RD.EC20.avg <- 64%
+  abs(4.5-2.2)/mean(c(4.5,2.2)) #RD.EC20.exp <- 69%
+  abs(0.8-0.6)/mean(c(0.8,0.6)) #RD.EC20.exp(43) <- 28%
+
+
+##SEM-AVS (molar)
+  AVSOCW <- lm(REL_EPH~log(SEMAVSfOC.avg),data=chem.inv.exp[11:20,])
+  summary(AVSOCW)
+  exp(((REL_EPH.exp*.8)-AVSOCW$coef[1])/AVSOCW$coef[2])
+    #Weir EC20 <- 79 µmol/g SEM-AVS/fOC(avg) for REL_EPH.avg[2]
+    #Weir EC20 <- 162 µmol/g SEM-AVS/fOC(avg) for REL_EPH.exp  
+    #Weir EC20 <- 0.4 umol/g SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+
+  AVSOCB <- lm(REL_EPH[1:10]~log(SEMAVSfOC.avg),data=chem.inv.exp[1:10,])
+  summary(AVSOCB)
+  exp(((REL_EPH.exp*.8)-AVSOCB$coef[1])/AVSOCB$coef[2])
+    #Birchtree EC20 <- 29 µmol/g SEM-AVS/fOC(avg) for REL_EPH.avg[2]
+    #Birchtree EC20 <- 37 µmol/g SEM-AVS/fOC(avg) for REL_EPH.exp  
+    #Birchtree EC20 <- 4.9 umol/g SEM-AVS/fOC(avg) for REL_EPH.exp(43)
+
+  abs(79-29)/mean(c(79,29)) #RD.EC20.avg <- 93%
+  abs(162-37)/mean(c(162,37)) #RD.EC20.exp <- 126%
+  abs(0.4-4.9)/mean(c(0.4,4.9)) #RD.EC20.exp(43) <- 170%
+
+
+##SEM-HFO (molar)
+  TNW <- lm(REL_EPH~log(NiSEMHFOfOC),data=chem.inv.exp[11:20,])
+  summary(TNW)
+  exp(((REL_EPH.exp*.8)-TNW$coef[1])/TNW$coef[2])
+    #Weir EC20 <- 38.2 µmol/g NiSEM-HFO/fOC for REL_EPH.avg[2]
+    #Weir EC20 <- 48.9 µmol/g NiSEM-HFO/fOC for REL_EPH.exp
+    #Weir EC20 <- 6.3 µmol/g NiSEM-HFO/fOC for REL_EPH.exp(43)
+
+  TNB <- lm(REL_EPH[1:10]~log(NiSEMHFOfOC),data=chem.inv.exp[1:10,])
+  summary(TNB)
+  exp(((REL_EPH.avg[2]*.8)-TNB$coef[1])/TNB$coef[2])
+    #Birchtree EC20 <- 23.7 µmol/g NiSEM-HFO/fOC for REL_EPH.avg[2]
+    #Birchtree EC20 <- 29.5 µmol/g NiSEM-HFO/fOC for REL_EPH.exp
+    #Birchtree EC20 <- 4.8 µmol/g NiSEM-HFO/fOC for REL_EPH.exp(43)
+
+  abs(38.2-23.7)/mean(c(38.2,23.7)) #RD.EC20.avg <- 47%
+  abs(48.9-29.5)/mean(c(48.9,29.5)) #RD.EC20.exp <- 49%
+  abs(6.3-4.8)/mean(c(6.3,4.8)) #RD.EC20.exp(43) <- 27%
 ```
+
+|Model|Birch EC20 (µmol/g)|Thompson EC20 (µmol/g)|RD.EC20|
+|:-:|:-:|:-:|:-:|
+|SEM Ni|0.6|0.8|0.28|
+|SEM-AVS/ƒOC (w/ 'outliers')|4.9|0.4|1.70|
+|SEM-AVS/ƒOC (w/o 'outliers')|12|15|0.22|
+|SEM-HFO/ƒOC|4.8|6.3|0.27|
 
 _____
 
@@ -528,6 +597,7 @@ CRMNi=10^CRMNi
 CRMy=predict(CRM,list(NiSEMHFOfOC=CRMNi))
 lines(CRMNi,CRMy,lwd=3)
 ```
+
 _____
 
 ####7. Sigmoid CRM EPH
@@ -654,3 +724,5 @@ CRM.EC20=which.min(abs(CRMy-ref*0.8))
 (EC20 = CRMNi[CRM.EC20])
 ECXX(CRM,20)
 ```
+
+####8. EC20s for 

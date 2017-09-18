@@ -173,7 +173,7 @@ ANOVA_F=function(mod,y){
 ```
 _____
 
-####1. WATER-SED correlations
+####1. WATER-SED correlations || Exposure sites only (reviewer's question about "along Ni gradient")
 
   a. Table of correlation coefficients between surface (rows 1-15) and deep (rows 16-30) sediment variables and water chemistry variables || Bold green cells represent significant correlations
   b. Table of correlation coefficients between surface sediment variables || Bold green cells represent significant correlations
@@ -183,10 +183,10 @@ _____
 library('formattable')
   p_bold <- formatter("span", style = x ~ style("font-weight" = ifelse(x < 0.05, "bold", NA)))
   
-  
-surf = surf[,c(6:18,21,22)]
-deep = deep[,c(6:18,21,22)]
-water = water [,5:12]
+  ##Exposure sites only
+surf = surf[c(5:14,19:28),c(6:18,21,22)] 
+deep = deep[c(5:14,19:28),c(6:18,21,22)]
+water = water [c(5:14,19:28),5:12]
 
 ##Set up matrices
 watersurf.cor <- matrix(data=NA,ncol=8,nrow=15,dimnames=list(colnames(surf),colnames(water)))
@@ -326,20 +326,43 @@ library(vegan)
 chem.inv.hel <- cbind(chem.inv[,1:65],decostand(chem.inv[,67:104],"hellinger"))
 inv.hel <- chem.inv.hel[,66:103]
 
-rda.water.sed=rda(chem.inv.hel[,66:103],chem.inv.hel[,c("TotalNi.surf","PAmFe.surf","Cond","pH")])
+rda.water.base=rda(inv.hel~1,allrefs)
+
+rda.water.sed=rda(inv.hel~TotalNi.surf+PAmFe.surf+Cond+pH,chem.inv.hel)
   #anova(rda.water.sed)
   #summary(rda.water.sed)
   RsquareAdj(rda.water.sed)
-  good.watersed = signif((goodness(rda.water.sed))*100,3)
+  #good.watersed = signif((goodness(rda.water.sed))*100,3)
+par(pin=c(3,3))
+  plot(rda.water.sed, choices = c(1,2))
+  plot(rda.water.sed, choices = c(3,4)) 
+   
+#rda.water.sed.for=ordiR2step(rda.water.base, rda.water.sed, direction="forward") 
+  #anova(rda.water.sed.for)
+  #summary(rda.water.sed.for)
+  #RsquareAdj(rda.water.sed.for)
+  #good.watersed.for = signif((goodness(rda.water.sed.for))*100,3)
+  #plot(rda.water.sed.for)  
 
 library('formattable')  
   highgood <- formatter("span", 
   style = x ~ style(color = ifelse((x > 20), "green", "black"),"font-weight" = ifelse((x > 20), "bold", NA)))
 #formattable(as.data.frame(good.watersed, check.names=F), list(~ highgood))
   
-par(pin=c(3,3))
-plot(rda.water.sed, choices = c(1,2))
-plot(rda.water.sed, choices = c(3,4))
+eph.cond <- lm(REL_EPH~log(Cond),chem.inv.exp)
+  summary(eph.cond)  
+  #par(mfrow=c(1,2))
+  #plot(eph.cond, which=c(1,2))
+  #par(mfrow=c(1,1))
+  #shapiro.test(resid(eph.cond))
+  
+  plot(REL_EPH~Cond,chem.inv.exp[1:10,], log="x",col=2, lwd=2)
+  points(REL_EPH~Cond,chem.inv.exp[11:20,], col=1, lwd=2)
+  abline(lm(REL_EPH~log10(Cond),chem.inv.exp[1:10,]),col=2, lwd=2)
+  abline(lm(REL_EPH~log10(Cond),chem.inv.exp[11:20,]),col=1, lwd=2)
+  abline(lm(REL_EPH~log10(Cond),chem.inv.exp),col=3, lwd=2, lty=3)
+  legend('topright',c("Birch","Thompson"), text.col=c(2,1), bty="n", text.font=2)
+  
 ```
 
 _____

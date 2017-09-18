@@ -14,7 +14,7 @@ Samples collected for surface water, sediment and benthic invertebrates at each 
   1. Correlations between water chemistry and sediment geochemistry for SI
   2. Relationships between relative abundances and chemistry variables for SI
   3. RDA including Conductivity + pH + TOTNi + FeHFO in one model
-  4. SEM-AVS/ƒOC EC10 with and without the outliers (SEM<AVS)
+  4. SEM-AVS/ƒOC EC10 without the outliers (SEM<AVS)
   5. Identify SEM-AVS/ƒOC outliers on all 3 concentration-response graphs
   6. Compare concentration-response relationships between EPH and TAL
   7. Sigmoid concentration-response model (code from 'compiled_R_tips.Rmd')
@@ -286,7 +286,7 @@ r_ab.p <- matrix(data=NA,ncol=62,nrow=38,dimnames=list(colnames(r_ab),colnames(a
 for(i in 1:ncol(r_ab)) {
   for(j in 1:ncol(allrefs)) {
     cor <- cor.test(r_ab[,i],allrefs[,j])
-    r_ab.cor[i,j] = signif(cor$estimate*10^2,2)
+    r_ab.cor[i,j] = signif(cor$estimate,2)
   }
 }
 
@@ -348,7 +348,7 @@ _____
 
   - Removed BE2 and WE2 data points which were <0 and calculated EC10 and EC20 for the data without the outliers. ECXX were well below the 130 umol/g benchmark (USEPA 2005).
 
-```{r 4. SEM-AVS model w/ and w/o outliers, echo=F, fig.align='center',tidy=TRUE, results="hide"}
+```{r 4. SEM-AVS model w/o outliers, echo=F, fig.align='center',tidy=TRUE, results="hide"}
 par(pin=c(1.5,3))
 
 ##SEM-AVS/ƒOC (avg)

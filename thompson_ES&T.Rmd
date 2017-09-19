@@ -175,13 +175,13 @@ _____
 
 ####1. WATER-SED correlations || Exposure sites only (reviewer's question about "along Ni gradient")
 
-  a. Table of correlation coefficients between surface (rows 1-15) and deep (rows 16-30) sediment variables and water chemistry variables || Bold green cells represent significant correlations
+  a. Table of correlation coefficients between surface (rows 1-15) and deep (rows 16-30) sediment variables and water chemistry variables || Bold green cells represent significant correlations (p < 0.01)
   b. Table of correlation coefficients between surface sediment variables || Bold green cells represent significant correlations
   c. Table of correlation coefficients between water chemistry variables || Bold green cells represent significant correlations
   
 ```{r 1. WATER-SED correlations, echo=F}
 library('formattable')
-  p_bold <- formatter("span", style = x ~ style("font-weight" = ifelse(x < 0.05, "bold", NA)))
+  p_bold <- formatter("span", style = x ~ style("font-weight" = ifelse(x < 0.01, "bold", NA)))
   
   ##Exposure sites only
 surf = surf[c(5:14,19:28),c(6:18,21,22)] 
@@ -220,8 +220,8 @@ watersed.p = rbind(watersurf.p,waterdeep.p)
   #formattable(as.data.frame(watersed.p, check.names=F), list(~ p_bold))
 
   ##Signif coef for water-sed correlations
-  highcor <- formatter("span",style = x ~ style(color = ifelse(watersed.p < 0.05, "green", "black"),
-                                                "font-weight" = ifelse(watersed.p < 0.05, "bold", NA)))  
+  highcor <- formatter("span",style = x ~ style(color = ifelse(watersed.p < 0.01, "green", "black"),
+                                                "font-weight" = ifelse(watersed.p < 0.01, "bold", NA)))  
   formattable(as.data.frame(watersed.cor, check.names=F), list(~ highcor))
 
 ##Set up matrices
@@ -252,16 +252,16 @@ for(i in 1:ncol(water)) {
   #formattable(as.data.frame(surf.p, check.names=F), list(~ p_bold))
 
   #Coef for surf-surf correlations
-  highcor <- formatter("span",style = x ~ style(color = ifelse(surf.p < 0.05, "green", "black"),
-                                                "font-weight" = ifelse(surf.p < 0.05, "bold", NA)))
+  highcor <- formatter("span",style = x ~ style(color = ifelse(surf.p < 0.01, "green", "black"),
+                                                "font-weight" = ifelse(surf.p < 0.01, "bold", NA)))
   formattable(as.data.frame(surf.cor, check.names=F), list(~ highcor))
 
   #P-values for water-water correlations
   #formattable(as.data.frame(water.p, check.names=F), list(~ p_bold))
 
   #Coef for water-water correlations
-  highcor <- formatter("span",style = x ~ style(color = ifelse(water.p < 0.05, "green", "black"),
-                                                "font-weight" = ifelse(water.p < 0.05, "bold", NA)))
+  highcor <- formatter("span",style = x ~ style(color = ifelse(water.p < 0.01, "green", "black"),
+                                                "font-weight" = ifelse(water.p < 0.01, "bold", NA)))
   formattable(as.data.frame(water.cor, check.names=F), list(~ highcor))
 
 ```
@@ -302,12 +302,12 @@ for(i in 1:ncol(r_ab)) {
 library('formattable')
   #P-values for relabund-chem correlations
   p_bold <- formatter("span", 
-  style = x ~ style("font-weight" = ifelse(x < 0.05, "bold", NA)))
+  style = x ~ style("font-weight" = ifelse(x < 0.01, "bold", NA)))
   #formattable(as.data.frame(r_ab.p, check.names=F), list(~ p_bold))
 
   #Coef for relabund-chem correlations
   highcor <- formatter("span", 
-  style = x ~ style(color = ifelse(r_ab.p < 0.05, "green", "black"),"font-weight" = ifelse(r_ab.p < 0.05, "bold", NA)))
+  style = x ~ style(color = ifelse(r_ab.p < 0.01, "green", "black"),"font-weight" = ifelse(r_ab.p < 0.01, "bold", NA)))
   formattable(as.data.frame(r_ab.cor, check.names=F), list(~ highcor))  
   
 

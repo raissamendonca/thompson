@@ -264,7 +264,15 @@ for(i in 1:ncol(water)) {
   highcor <- formatter("span",style = x ~ style(color = ifelse(water.p < 0.01, "green", "black"),
                                                 "font-weight" = ifelse(water.p < 0.01, "bold", NA)))
   formattable(as.data.frame(water.cor, check.names=F), list(~ highcor))
-
+  
+##Relationship between Total Ni and Cond w/ and w/o Cond sites > 4000 (n=2)
+  plot(TotalNi.surf~Cond,chem.inv.exp)
+  abline(lm(TotalNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2) #Best-fit line for model without Cond>4000
+  summary(lm(TotalNi.surf~Cond,chem.inv.exp))
+  
+  plot(TotalNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,])
+  abline(lm(TotalNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2)
+  summary(lm(TotalNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]))
 ```
 _____
 

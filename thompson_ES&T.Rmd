@@ -28,6 +28,7 @@ par(pin=c(2.5,2.5),las=1)
 
 ```{r Load datasets, include=F}
 setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/Thompson/R Directory")
+#setwd("/Users/rmarques/Documents/GitHub/Thompson")
 library(vegan)
 library(FSA)
 

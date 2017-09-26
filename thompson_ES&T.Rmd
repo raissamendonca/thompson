@@ -267,17 +267,24 @@ for(i in 1:ncol(water)) {
   highcor <- formatter("span",style = x ~ style(color = ifelse(water.p < 0.01, "green", "black"),
                                                 "font-weight" = ifelse(water.p < 0.01, "bold", NA)))
   formattable(as.data.frame(water.cor, check.names=F), list(~ highcor))
-  
+```  
+
+_____
+
+##### *Linear relationship between NiSEM and conductivity*
+  - Two Birchtree mine sites with high conductivity (> 4000 µS/cm): when included, regression not significant (p = 0.7) but when removed (as "outliers"), regression is significant (p= 0.04) with a positive relationship between NiSEM and conductivity
+```{r SEMNi~Cond relationship, echo=F, fig.align='center',tidy=TRUE, results="hide"}  
 ##Relationship between Total Ni and Cond w/ and w/o Cond sites > 4000 (n=2)
   par(pin=c(3,3))
   plot(SEMNi.surf~Cond,chem.inv.exp)
-  abline(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2) #Best-fit line for model without Cond>4000
+  #abline(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2) #Best-fit line for model without Cond>4000
   summary(lm(SEMNi.surf~Cond,chem.inv.exp))
   
   plot(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,])
   abline(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2)
   summary(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]))
 ```
+
 _____
 
 ####2. REL_ABUND-CHEM correlations
@@ -329,9 +336,9 @@ _____
 
   - RDA model with forward-selected water and surface sediment variables. R squared increased ~5% and overall pattern is similar to separate models. 
 
-  - Different iterations of the full model (not shown: 1. All water variables + all surface sediment variables; 2. Conductivity + pH + all surface sediment variables) either did not significantly explain community variation (1. p = 0.15) or produced a parsimonious (post-forward stepping) model identical to RDA[SURF] (2).
+  - Different iterations of the full model (not shown: 1. All water variables + all surface sediment variables; 2. Conductivity + pH + all surface sediment variables) either did not significantly explain community variation (1. p = 0.15) or produced a parsimonious (post-forward stepping) model identical to RDA*SURF* (2).
 
-```{r 3. WATER+SED RDA model, echo=F, fig.align='center',tidy=TRUE}
+```{r 3. WATER+SED RDA model, echo=F, fig.align='center', tidy=TRUE}
 library(vegan)
 
 chem.inv.hel <- cbind(chem.inv[,1:65],decostand(chem.inv[,67:104],"hellinger"))
@@ -359,7 +366,14 @@ library('formattable')
   highgood <- formatter("span", 
   style = x ~ style(color = ifelse((x > 20), "green", "black"),"font-weight" = ifelse((x > 20), "bold", NA)))
 #formattable(as.data.frame(good.watersed, check.names=F), list(~ highgood))
-  
+```
+
+_____
+
+##### *Log-linear relationship between EPH relative abundance and conductivity*
+  - Log-linear relationship between Ephemeridae relative abundance and conductivity significant (p = 0.003), but no effect of mine location (same slope for Birchtree and Thompson mines)
+  - EPH~Cond graph to be added to SI as requested by reviewer 1
+```{r Log-linear rel EPH~Cond, echo=F, fig.align='center',tidy=TRUE, results="hide"}
 eph.cond <- lm(REL_EPH~log(Cond),chem.inv.exp)
   summary(eph.cond)  
   #par(mfrow=c(1,2))
@@ -367,26 +381,42 @@ eph.cond <- lm(REL_EPH~log(Cond),chem.inv.exp)
   #par(mfrow=c(1,1))
   #shapiro.test(resid(eph.cond))
   
-  plot(REL_EPH~Cond,chem.inv.exp[1:10,], log="x",col=2, lwd=2)
-  points(REL_EPH~Cond,chem.inv.exp[11:20,], col=1, lwd=2)
-  abline(lm(REL_EPH~log10(Cond),chem.inv.exp[1:10,]),col=2, lwd=2)
-  abline(lm(REL_EPH~log10(Cond),chem.inv.exp[11:20,]),col=1, lwd=2)
-  abline(lm(REL_EPH~log10(Cond),chem.inv.exp),col=3, lwd=2, lty=3)
-  legend('topright',c("Birch","Thompson"), text.col=c(2,1), bty="n", text.font=2)
+  #Rough graph
+    #plot(REL_EPH~Cond,chem.inv.exp[1:10,], log="x",col=2, lwd=2)
+    #points(REL_EPH~Cond,chem.inv.exp[11:20,], col=1, lwd=2)
+    #abline(lm(REL_EPH~log10(Cond),chem.inv.exp[1:10,]),col=2, lwd=2)
+    #abline(lm(REL_EPH~log10(Cond),chem.inv.exp[11:20,]),col=1, lwd=2)
+    #abline(lm(REL_EPH~log10(Cond),chem.inv.exp),col=3, lwd=2, lty=3)
+    #legend('topright',c("Birch","Thompson"), text.col=c(2,1), bty="n", text.font=2)
   
+  #Pretty graph
+    par(pin=c(3,3))
+    plot(REL_EPH~Cond, data=chem.inv.exp,log="x",pch=c(rep(16,10),rep(1,10)),lwd=3,las=1,cex=1.5,
+      ylim=c(0,50), xlim=c(100,10000), col=c(rep("tan1",10),rep("dodgerblue4",10)),
+      xlab=expression(paste("Conductivity (µS cm"^"-1",")")),ylab="Ephemeridae abundance (%)",xaxt="n")
+    logaxis(2,4,1)
+
+    #abline(lm(REL_EPH[1:10]~log10(Cond[1:10]), data=chem.inv.exp),lty=3,lwd=3,col="tan1")
+    #abline(lm(REL_EPH[11:20]~log10(Cond[11:20]), data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
+    abline(lm(REL_EPH~log10(Cond), data=chem.inv.exp),lty=3,lwd=3,col="darkgray")
+    par(xpd=T)
+    legend(13000,52,"Birchtree",col = "tan1",pt.lwd=3,bty="n",pch=16,text.font=2,pt.cex=1.5,cex=0.8)
+    legend(13000,48.5,"Thompson",col = "dodgerblue4",pt.lwd=3,bty="n",pch=1,text.font=2,pt.cex=1.5,cex=0.8)
+    par(xpd=F)
+
 tal.cond <- lm(REL_TAL~log(Cond),chem.inv.exp)
-  summary(tal.cond)  
+  #summary(tal.cond)  
   #par(mfrow=c(1,2))
   #plot(tal.cond, which=c(1,2))
   #par(mfrow=c(1,1))
   #shapiro.test(resid(tal.cond))
   
-  plot(REL_TAL~Cond,chem.inv.exp[1:10,], log="x",col=2, lwd=2)
-  points(REL_TAL~Cond,chem.inv.exp[11:20,], col=1, lwd=2)
-  abline(lm(REL_TAL~log10(Cond),chem.inv.exp[1:10,]),col=2, lwd=2)
-  abline(lm(REL_TAL~log10(Cond),chem.inv.exp[11:20,]),col=1, lwd=2)
-  abline(lm(REL_TAL~log10(Cond),chem.inv.exp),col=3, lwd=2, lty=3)
-  legend('topleft',c("Birch","Thompson"), text.col=c(2,1), bty="n", text.font=2)  
+  #plot(REL_TAL~Cond,chem.inv.exp[1:10,], log="x",col=2, lwd=2)
+  #points(REL_TAL~Cond,chem.inv.exp[11:20,], col=1, lwd=2)
+  #abline(lm(REL_TAL~log10(Cond),chem.inv.exp[1:10,]),col=2, lwd=2)
+  #abline(lm(REL_TAL~log10(Cond),chem.inv.exp[11:20,]),col=1, lwd=2)
+  #abline(lm(REL_TAL~log10(Cond),chem.inv.exp),col=3, lwd=2, lty=3)
+  #legend('topleft',c("Birch","Thompson"), text.col=c(2,1), bty="n", text.font=2)  
 
   
 ```
@@ -455,7 +485,7 @@ chem.inv.exp$SEMNi.surf.mol = chem.inv.exp$SEMNi.surf/58.69
   ##SEM Ni
 plot(REL_EPH~SEMNi.surf.mol, data=chem.inv.exp[c(1,3:11,13:20),],log="x",pch=c(rep(16,9),rep(1,9)),lwd=3,las=1,cex=1.5,
      ylim=c(0,50), xlim=c(0.1,10), col=c(rep("tan1",9),rep("dodgerblue4",9)),
-     xlab=expression(paste("Ni"[SEM]*" (µmol g"^"-1",")")),ylab="Ephemeridae abundance (%)",xaxt="n")
+     xlab=expression(paste("Ni"[SEM]*" (µmol g"^"-1"," "[DW]*")")),ylab="Ephemeridae abundance (%)",xaxt="n")
 logaxis(-1,1,1)
 points(3.869825,14,pch=3,lwd=3,col="tan1") #Birchtree data point that was negative before conversion to min value (BE2)
 points(3.879366,3,pch=3,lwd=3,col="dodgerblue4") #Weir data point that was negative before conversion to min value (WE2)
@@ -467,7 +497,7 @@ abline(lm(REL_EPH[11:20]~log10(SEMNi.surf.mol[11:20]), data=chem.inv.exp),lty=1,
   ##SEM-AVS/ƒOC (avg)
 plot(REL_EPH~SEMAVSfOC.avg, data=chem.inv.exp[c(1,3:11,13:20),],log="x",pch=c(rep(16,9),rep(1,9)),lwd=3,las=1,cex=1.5,
      ylim=c(0,50),xlim=c(5,1000),col=c(rep("tan1",9),rep("dodgerblue4",9)),
-     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),
+     xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1"," "[OC]*")")),
      ylab="",yaxt="n", xaxt="n")
 logaxis(1,3,1)
 axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
@@ -481,7 +511,7 @@ abline(lm(REL_EPH[11:20]~log10(SEMAVSfOC.avg[11:20]), data=chem.inv.exp),lty=1,l
   ##SEM-HFO/ƒOC (avg)
 plot(REL_EPH~NiSEMHFOfOC, data=chem.inv.exp[c(1,3:11,13:20),],pch=c(rep(16,9),rep(1,9)),log="x",lwd=3,las=1,cex=1.5,
      col=c(rep("tan1",9),rep("dodgerblue4",9)), xlim=c(1,100), ylim=c(0,50),
-     xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (µmol g"^"-1",")")),
+     xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (µmol g"^"-1"," "[OC]*")")),
      ylab="",yaxt="n",xaxt="n")
 axis(2,at=c(0,10,20,30,40,50),labels=c("","","","","",""),tick=T)
 logaxis(0,2,1)

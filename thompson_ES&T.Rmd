@@ -65,7 +65,7 @@ thomp.exp <- subset(allrefs,Effluent=="Exposure") # Chem variables .surf and .de
   thomp.exp$C.avg <- c(rep((mean(thomp.exp$C.surf[1:10])),times=10),rep((mean(thomp.exp$C.surf[11:20])),times=10))
   thomp.exp$NiSEMHFO <- thomp.exp$SEMNi.surf-thomp.exp$ASCNi.surf
   thomp.exp$NiSEMDIT <- thomp.exp$SEMNi.surf-thomp.exp$DITNi.surf
-  thomp.exp$NiSEMHFOfOC <- ((thomp.exp$SEMNi.surf/58.69)-(thomp.exp$ASCNi.surf/58.69))/(thomp.exp$C.avg/100)
+  thomp.exp$NiSEMHFOfOC <- ((thomp.exp$SEMNi.surf/58.69)-(thomp.exp$ASCNi.surf/58.69))/(thomp.exp$C.avg/100) #Molar scale
   thomp.exp$SEMAVSfOC.avg = ((thomp.exp$SEMNi.surf/58.69)-thomp.exp$AVS.surf)/(thomp.exp$C.avg/100) # Org C corrected
   thomp.exp$SEMAVSfOC.avg[thomp.exp$SEMAVSfOC.avg<0] = 7.130744 # Make all values > 0 to make graph on log scale; 7.130744 is min positive value from exposure sites
 
@@ -77,7 +77,7 @@ chem.inv <- read.csv(file="thomp_chem_inverts.csv") # Chem variables .surf and .
   chem.inv$REL_EPH <- chem.inv$REL_EPH*100
   chem.inv$SEMAVSfOC.avg <- ((chem.inv$SEMNi.surf/58.69)-chem.inv$AVS.surf)/(chem.inv$C.avg/100)
   chem.inv$SEMAVSfOC.avg[chem.inv$SEMAVSfOC.avg<0] = 4.898928 # Make all values > 0 to make graph on log scale; 4.898928 is min positive value from ref and exp sites
-  chem.inv$NiSEMHFOfOC <- (chem.inv$SEMNi.surf-chem.inv$ASCNi.surf)/(chem.inv$C.avg/100)
+  chem.inv$NiSEMHFOfOC <- ((chem.inv$SEMNi.surf/58.69)-(chem.inv$ASCNi.surf/58.69))/(chem.inv$C.avg/100) #Molar scale
   chem.inv$REL_TAL <- round((benthos$TAL/rowSums(benthos[2:39]))*100)
   chem.inv$SEMAVSfOC.surf[chem.inv$SEMAVSfOC.surf<0] <- 15
   chem.inv$SEMAVS.surf[chem.inv$SEMAVS.surf<0] <- 0.320
@@ -373,7 +373,7 @@ _____
 ##### *Log-linear relationship between EPH relative abundance and conductivity*
   - Log-linear relationship between Ephemeridae relative abundance and conductivity significant (p = 0.003), but no effect of mine location (same slope for Birchtree and Thompson mines)
   - EPH~Cond graph to be added to SI as requested by reviewer 1
-```{r Log-linear rel EPH~Cond, echo=F, fig.align='center',tidy=TRUE, results="hide"}
+```{r Log-linear rel EPH~Cond, echo=F, fig.align='center', tidy=TRUE, results="hide"}
 eph.cond <- lm(REL_EPH~log(Cond),chem.inv.exp)
   summary(eph.cond)  
   #par(mfrow=c(1,2))
@@ -605,6 +605,10 @@ _____
   - Reliable CRMs could not be developed for Talitridae
   
 ```{r 6. CRM TAL, echo=F, fig.align='center',tidy=T}
+
+chem.inv$TotalNi.surf.mol = chem.inv$TotalNi.surf/58.69
+chem.inv$SEMNi.surf.mol = chem.inv$SEMNi.surf/58.69
+
 tal.ni <- lm(REL_TAL~log(TotalNi.surf),data=chem.inv) #Can also separate analysis by [1:20,] and [21:40,]
   summary(tal.ni)
 
@@ -623,24 +627,25 @@ par(pin=c(3,3))
 
 ##TOTAL Ni SURFACE || Cannot fit sigmoid curve
 
-plot(REL_TAL~TotalNi.surf,log="x",data=chem.inv[1:20,], xlim=c(40,600), ylim=c(0,45), cex=1.5, col=2,
-     pch=16,las=1,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Talitridae relative abundance (%)") 
+plot(REL_TAL~TotalNi.surf.mol,log="x",data=chem.inv[1:20,], xlim=c(0.5,10), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[TOT]*" (µmol g"^"-1"," "[DW]*")")),
+     ylab="Talitridae relative abundance (%)") 
       #Ref values are all the average of the 4 ref sites from the respective mine
-points(REL_TAL~TotalNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+points(REL_TAL~TotalNi.surf.mol,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 
-CRM=nls(REL_TAL~a/(1+10^(2*b*(log10(TotalNi.surf)-c))),start=list(a=50,b=2,c=3),data=chem.inv)
-CRMNi=seq(0.01,3,by=0.01)
+CRM=nls(REL_TAL~a/(1+10^(2*b*(log10(TotalNi.surf.mol)-c))),start=list(a=50,b=1,c=1),data=chem.inv)
+CRMNi=seq(-2,3,by=0.01)
 CRMNi=10^CRMNi
-CRMy=predict(CRM,list(TotalNi.surf=CRMNi))
+CRMy=predict(CRM,list(TotalNi.surf.mol=CRMNi))
 lines(CRMNi,CRMy,lwd=3)
 
 ##SEM Ni || Cannot fit sigmoid curve
 
-plot(REL_TAL~SEMNi.surf,log="x",data=chem.inv[1:20,],cex=1.5, xlim=c(15,510), ylim=c(0,45), col=2,
-     pch=16,las=1,xlab=expression(paste("Ni"[SEM]*" (mg kg"^"-1",")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
-points(REL_TAL~SEMNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+plot(REL_TAL~SEMNi.surf.mol,log="x",data=chem.inv[1:20,],cex=1.5, xlim=c(0.2,10), ylim=c(0,45), col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[SEM]*" (µmol g"^"-1"," "[DW]*")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_TAL~SEMNi.surf.mol,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 
@@ -648,7 +653,7 @@ legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 ##SEM-AVS/ƒOC (C.avg) || Model fit looks pretty awful
 
 plot(REL_TAL~SEMAVSfOC.avg,log="x",data=chem.inv[1:20,], xlim=c(5,120), ylim=c(0,45),cex=1.5, col=2,
-     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1"," "[OC]*")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
 points(REL_TAL~SEMAVSfOC.avg,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
@@ -662,13 +667,14 @@ lines(CRMNi,CRMy,lwd=3)
 
 ##SEM Ni-HFO/ƒOC
 
-plot(REL_TAL~NiSEMHFOfOC,log="x",data=chem.inv[1:20,],xlim=c(150,5000), ylim=c(0,45), cex=1.5, col=2,
-     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (mg kg"^"-1",")")),ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+plot(REL_TAL~NiSEMHFOfOC,log="x",data=chem.inv[1:20,],xlim=c(2,100), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (µmol g"^"-1"," "[OC]*")")),
+     ylab="Talitridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
 points(REL_TAL~NiSEMHFOfOC,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topleft", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 
-CRM=nls(REL_TAL~a/(1+10^(3*b*(log10(NiSEMHFOfOC)-c))),start=list(a=50,b=10,c=3.5),data=chem.inv)
+CRM=nls(REL_TAL~a/(1+10^(3*b*(log10(NiSEMHFOfOC)-c))),start=list(a=50,b=1,c=2),data=chem.inv)
 CRMNi=seq(0.01,4,by=0.01)
 CRMNi=10^CRMNi
 CRMy=predict(CRM,list(NiSEMHFOfOC=CRMNi))
@@ -681,24 +687,27 @@ _____
 ```{r 7. Sigmoid CRM EPH, echo=F, fig.align='center',tidy=T}
 par(pin=c(3,3))
 
+chem.inv$TotalNi.surf.mol = chem.inv$TotalNi.surf/58.69
+chem.inv$SEMNi.surf.mol = chem.inv$SEMNi.surf/58.69
 
-##TOTAL Ni SURFACE
+##TOTAL Ni SURFACE (Molar)
 
-plot(REL_EPH~TotalNi.surf,log="x",data=chem.inv[1:20,], xlim=c(40,600), ylim=c(0,45), cex=1.5, col=2,
-     pch=16,las=1,xlab=expression(paste("Ni"[TOT]*" (mg kg"^"-1",")")),ylab="Ephemeridae relative abundance (%)") 
+plot(REL_EPH~TotalNi.surf.mol,log="x",data=chem.inv[1:20,], xlim=c(0.5,10), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[TOT]*" (µmol g"^"-1"," "[DW]*")")),
+     ylab="Ephemeridae relative abundance (%)") 
       #Ref values are all the average of the 4 ref sites from the respective mine
-points(REL_EPH~TotalNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+points(REL_EPH~TotalNi.surf.mol,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 
-CRM=nls(REL_EPH~a/(1+10^(2*b*(log10(TotalNi.surf)-c))),start=list(a=50,b=1,c=1.5),data=chem.inv)
-CRMNi=seq(0.01,3,by=0.01)
+CRM=nls(REL_EPH~a/(1+10^(2*b*(log10(TotalNi.surf.mol)-c))),start=list(a=50,b=0.5,c=1),data=chem.inv)
+CRMNi=seq(-2,3,by=0.01)
 CRMNi=10^CRMNi
-CRMy=predict(CRM,list(TotalNi.surf=CRMNi))
+CRMy=predict(CRM,list(TotalNi.surf.mol=CRMNi))
 lines(CRMNi,CRMy,lwd=3)
 
   #Standard error for all predicted values
-#se.pred = sqrt(apply(attr(predict(CRM, data.frame(TotalNi.surf=CRMNi)),"gradient"),1,function(x) sum(vcov(CRM)*outer(x,x))))
+#se.pred = sqrt(apply(attr(predict(CRM, data.frame(TotalNi.surf.mol=CRMNi)),"gradient"),1,function(x) sum(vcov(CRM)*outer(x,x))))
   #Lower bound of 95% confidence intervals (2.5%)
 #low.CI=CRMy+se.pred*qnorm(0.025)
   #Upper bound of 95% confidence intervals (97.5%)
@@ -708,8 +717,8 @@ lines(CRMNi,CRMy,lwd=3)
 #lines(CRMNi,low.CI,lwd=2,lty=2)
 #lines(CRMNi,up.CI,lwd=2,lty=2)
 
-CRM=nls(REL_EPH~SSlogis(log10(TotalNi.surf),Asym,xmid,scal),data=chem.inv)
-summary(CRM) #EC20 = 151.4 mg/kg Total Ni
+CRM=nls(REL_EPH~SSlogis(log10(TotalNi.surf.mol),Asym,xmid,scal),data=chem.inv)
+summary(CRM) #EC20 = 151.4 mg/kg Total Ni // EC20 = 2.57 µmol/g Total Ni
 
 ANOVA_F(CRM,chem.inv$REL_EPH)
 
@@ -721,22 +730,22 @@ CRM.EC20=which.min(abs(CRMy-ref*0.8))
 ECXX(CRM,20)
 
 
-##SEM Ni
+##SEM Ni (Molar)
 
-plot(REL_EPH~SEMNi.surf,log="x",data=chem.inv[1:20,],cex=1.5, xlim=c(15,510), ylim=c(0,45), col=2,
-     pch=16,las=1,xlab=expression(paste("Ni"[SEM]*" (mg kg"^"-1",")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
-points(REL_EPH~SEMNi.surf,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
+plot(REL_EPH~SEMNi.surf.mol,log="x",data=chem.inv[1:20,],cex=1.5, xlim=c(0.2,10), ylim=c(0,45), col=2,
+     pch=16,las=1,xlab=expression(paste("Ni"[SEM]*" (µmol g"^"-1"," "[DW]*")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+points(REL_EPH~SEMNi.surf.mol,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 
-CRM=nls(REL_EPH~a/(1+10^(1.5*b*(log10(SEMNi.surf)-c))),start=list(a=50,b=10,c=2),data=chem.inv)
-CRMNi=seq(0.01,3,by=0.01)
+CRM=nls(REL_EPH~a/(1+10^(2*b*(log10(SEMNi.surf.mol)-c))),start=list(a=50,b=0.5,c=1),data=chem.inv)
+CRMNi=seq(-2,3,by=0.01)
 CRMNi=10^CRMNi
-CRMy=predict(CRM,list(SEMNi.surf=CRMNi))
+CRMy=predict(CRM,list(SEMNi.surf.mol=CRMNi))
 lines(CRMNi,CRMy,lwd=3)
 
-CRM=nls(REL_EPH~SSlogis(log10(SEMNi.surf),Asym,xmid,scal),data=chem.inv)
-summary(CRM) #EC20 = 87.1 mg/kg SEM Ni
+CRM=nls(REL_EPH~SSlogis(log10(SEMNi.surf.mol),Asym,xmid,scal),data=chem.inv)
+summary(CRM) #EC20 = 87.1 mg/kg SEM Ni // EC20 = 1.51 µmol/g SEM Ni
 
 ANOVA_F(CRM,chem.inv$REL_EPH)
 
@@ -751,7 +760,7 @@ ECXX(CRM,20)
 ##SEM-AVS/ƒOC (C.avg) // (SEM-AVS corrected for average C from reference and exposure surface sediment)
 
 plot(REL_EPH~SEMAVSfOC.avg,log="x",data=chem.inv[1:20,], xlim=c(5,120), ylim=c(0,45),cex=1.5, col=2,
-     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1",")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-AVS)/",ƒ,""[OC]*" (µmol g"^"-1"," "[OC]*")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
 points(REL_EPH~SEMAVSfOC.avg,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
@@ -775,22 +784,23 @@ CRM.EC20=which.min(abs(CRMy-ref*0.8))
 ECXX(CRM,20)
 
 
-##SEM Ni-HFO/ƒOC
+##SEM Ni-HFO/ƒOC (Molar)
 
-plot(REL_EPH~NiSEMHFOfOC,log="x",data=chem.inv[1:20,],xlim=c(150,5000), ylim=c(0,45), cex=1.5, col=2,
-     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (mg kg"^"-1",")")),ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
+plot(REL_EPH~NiSEMHFOfOC,log="x",data=chem.inv[1:20,],xlim=c(2,100), ylim=c(0,45), cex=1.5, col=2,
+     pch=16,las=1,xlab=expression(paste("(Ni"[SEM]*"-Ni"[HFO]*")/",ƒ,""[OC]*" (µmol g"^"-1"," "[OC]*")")),
+     ylab="Ephemeridae relative abundance (%)") #Ref values are all the average of the 4 ref sites from the respective mine
 points(REL_EPH~NiSEMHFOfOC,data=chem.inv[21:40,],cex=1.5,pch=16,las=1, xlab="n",ylab="n")
 
 legend("topright", c("Birch", "Thompson"), text.col=c(2,1), bty="n", text.font=2)
 
-CRM=nls(REL_EPH~a/(1+10^(3*b*(log10(NiSEMHFOfOC)-c))),start=list(a=50,b=10,c=3.5),data=chem.inv)
+CRM=nls(REL_EPH~a/(1+10^(3*b*(log10(NiSEMHFOfOC)-c))),start=list(a=50,b=1,c=1.5),data=chem.inv)
 CRMNi=seq(0.01,4,by=0.01)
 CRMNi=10^CRMNi
 CRMy=predict(CRM,list(NiSEMHFOfOC=CRMNi))
 lines(CRMNi,CRMy,lwd=3)
 
 CRM=nls(REL_EPH~SSlogis(log10(NiSEMHFOfOC),Asym,xmid,scal),data=chem.inv)
-summary(CRM) #EC20 = 891.3 mg/kg SEM-HFO/ƒOC (avg)
+summary(CRM) #EC20 = 891.3 mg/kg SEM-HFO/ƒOC (avg) // EC20 = 15.49 µmol/g SEM-HFO/ƒOC (avg)
 
 ANOVA_F(CRM,chem.inv$REL_EPH)
 
@@ -801,3 +811,10 @@ CRM.EC20=which.min(abs(CRMy-ref*0.8))
 (EC20 = CRMNi[CRM.EC20])
 ECXX(CRM,20)
 ```
+
+|*Log-Logistic* Model|EC20 (µmol/g)|
+|:-:|:-:|
+|Total Ni|2.6|
+|SEM Ni|1.5|
+|SEM-AVS/ƒOC (w/ 'outliers')|26.9|
+|SEM-HFO/ƒOC|15.5|

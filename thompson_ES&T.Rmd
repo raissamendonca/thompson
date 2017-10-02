@@ -179,6 +179,7 @@ _____
 
 ####1. WATER-SED correlations || Exposure sites only (reviewer's question about "along Ni gradient")
 
+  *All correlation tables are between log-log variables*
   a. Table of correlation coefficients between surface (rows 1-15) and deep (rows 16-30) sediment variables and water chemistry variables || Bold green cells represent significant correlations (p < 0.01)
   b. Table of correlation coefficients between surface sediment variables || Bold green cells represent significant correlations
   c. Table of correlation coefficients between water chemistry variables || Bold green cells represent significant correlations
@@ -188,9 +189,9 @@ library('formattable')
   p_bold <- formatter("span", style = x ~ style("font-weight" = ifelse(x < 0.01, "bold", NA)))
   
   ##Exposure sites only
-surf = surf[c(5:14,19:28),c(6:18,21,22)] 
-deep = deep[c(5:14,19:28),c(6:18,21,22)]
-water = water [c(5:14,19:28),5:12]
+surf = log(surf[c(5:14,19:28),c(6:18,21,22)])
+deep = log(deep[c(5:14,19:28),c(6:18,21,22)])
+water = log(water[c(5:14,19:28),5:12])
 
 ##Set up matrices
 watersurf.cor <- matrix(data=NA,ncol=8,nrow=15,dimnames=list(colnames(surf),colnames(water)))
@@ -272,17 +273,13 @@ for(i in 1:ncol(water)) {
 _____
 
 ##### *Linear relationship between NiSEM and conductivity*
-  - Two Birchtree mine sites with high conductivity (> 4000 µS/cm): when included, regression not significant (p = 0.7) but when removed (as "outliers"), regression is significant (p= 0.04) with a positive relationship between NiSEM and conductivity
+  - Log-log correlation significant between NiSEM and conductivity (p < 0.001, R2 = 0.65, all sites included)
 ```{r SEMNi~Cond relationship, echo=F, fig.align='center',tidy=TRUE, results="hide"}  
-##Relationship between Total Ni and Cond w/ and w/o Cond sites > 4000 (n=2)
+##Relationship between Total Ni and Cond
   par(pin=c(3,3))
-  plot(SEMNi.surf~Cond,chem.inv.exp)
-  #abline(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2) #Best-fit line for model without Cond>4000
-  summary(lm(SEMNi.surf~Cond,chem.inv.exp))
-  
-  plot(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,])
-  abline(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]),col=2)
-  summary(lm(SEMNi.surf~Cond,chem.inv.exp[chem.inv.exp$Cond<4000,]))
+  plot(SEMNi.surf~Cond, log="xy", chem.inv.exp)
+  abline(lm(log10(SEMNi.surf)~log10(Cond),chem.inv.exp),col=2)
+  summary(lm(log(SEMNi.surf)~log(Cond),chem.inv.exp))
 ```
 
 _____

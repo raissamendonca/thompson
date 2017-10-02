@@ -16,7 +16,7 @@ par(pin=c(2.5,2.5),las=1)
 ```
 
 ```{r Load datasets, include=F}
-setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/Thompson/R Directory")
+setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/GitHub/Thompson")
 library(vegan)
 library(FSA)
 
@@ -2952,10 +2952,11 @@ text(0.07,-0.85,"pH",font=2)
 # arrows(0,0,0.7,0,length=0.1, angle=15,lwd=2)
 # text(0.7,-0.1,"Conductivity",cex=1,font=2)
 ```
+```
 
 > EXPOSURE ONLY: Surface Sediment
 
-```{r fig.align='center'}
+```{r, fig.align='center'}
 library(vegan)
 benthos.exp.hel=benthos.chem.exp.hel[,63:100]
 benthos.exp.hel.rda.base=rda(benthos.exp.hel~TotalNi.surf,allrefs[c(11:20,31:40),1:62])

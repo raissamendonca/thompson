@@ -1503,11 +1503,16 @@ BirchNi <- BirchNi[,order(BirchNi[7,])]
 par(pin=c(3,3))
 par(xpd=T)
 
+colfunc <- colorRampPalette(c("deepskyblue4","aliceblue"))
+
+#angle1 <- rep(c(45,180,135), length.out=2) #angle and density adds lines to the barplot fill 
+#density2 <- seq(15,35,length.out=2)  #[angle=angle1, density=density2]
+
 # Birch Surface
-barplot(BirchNi[1:3,],las=1,ylab="Sediment Ni (mg/kg)",ylim=c(0,600))
+barplot(BirchNi[1:3,],las=1,ylab=expression(paste("Sediment nickel (mg kg"^"-1",")")),ylim=c(0,600),col=colfunc(3))
 box()
-legend(-0.5,615,legend=c("Residual",expression(paste("Ni"[HFO]*"")),expression(paste("Ni"[CFO]*""))),
-       fill=c("grey80","grey50","grey30"),bty="n")
+legend(-0.5,605,legend=c(expression(paste("Ni"[CFO]*"")),expression(paste("Ni"[HFO]*"")),"Residual"),
+       fill=colfunc(3),bty="n")
 text(1,750,"Birchtree Surface")
 
 # Birch Deep
@@ -1536,10 +1541,10 @@ par(pin=c(3,3))
 par(xpd=T)
 
 # Weir Surface
-barplot(WeirNi[1:3,],las=1,ylab="Sediment Ni (mg/kg)",ylim=c(0,600))
+barplot(WeirNi[1:3,],las=1,ylab=expression(paste("Sediment nickel (mg kg"^"-1",")")),ylim=c(0,600),col=colfunc(3))
 box()
-legend(-.5,615,legend=c("Residual",expression(paste("Ni"[HFO]*"")),expression(paste("Ni"[CFO]*""))),
-       fill=c("grey80","grey50","grey30"),bty="n")
+legend(-0.5,605,legend=c(expression(paste("Ni"[CFO]*"")),expression(paste("Ni"[HFO]*"")),"Residual"),
+       fill=colfunc(3),bty="n")
 text(1,750,"Weir Surface")
 
 # Weir Deep

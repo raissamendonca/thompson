@@ -65,8 +65,51 @@ Benthic macroinvertebrate samples were collected with ponar grabs and sieved thr
 |pH	|	pH of surface water samples
 |Hardness	|Water hardness analyzed through EDTA titration method									|	mg CaCO3/L
 
+> thomp_benthos.csv
+
+| Name | Definition |
+| :---: | :---: |
+TAL		  |Talitridae (Amphipoda)				
+GAM			|Gammaridae (Amphipoda)							
+EPH			|Ephemeridae (Ephemeroptera)						
+HEP			|Heptageniidae (Ephemeroptera)						
+BAE			|Baetidae (Ephemeroptera)						
+CAE			|Caenidae (Ephemeroptera)						
+PSY			|Psychomiidae (Trichoptera)					
+BRA			|Brachycentridae (Trichoptera)		 
+LEP			|Leptoceridae (Trichoptera)			
+POL			|Polycentropodidae (Trichoptera)			
+HYD			|Hydroptilidae (Trichoptera)			
+LIM			|Limnephilidae (Trichoptera)		
+PHR			|Phryganeidae (Trichoptera)			
+PHI			|Philopotamidae (Trichoptera)			
+COR			|Corixidae (Hemiptera)				
+ELM			|Elmidae (Coleoptera)				
+HAL			|Haliplidae (Coleoptera)				
+GYR			|Gyrinidae (Coleoptera)				
+DYT			|Dytiscidae (Coleoptera)				
+CAR		  |Carabidae (Coleoptera)				
+CHI			|Chironomidae (Diptera)				
+CER			|Ceratopogonidae (Diptera)			
+CUL			|Culicidae (Diptera)				
+THA			|Thaumaleidae (Diptera)				
+MUS			|Musicidae (Diptera)				
+TAB			|Tabanidae (Diptera)				
+PLA			|Planorbidae (Gastropoda)			
+VAL			|Valvatidae (Gastropoda)				
+LYM			|Lymnaeidae (Gastropoda)				
+UNI			|Unionidae (Bivalvia)				
+SPH			|Sphaeriidae (Bivalvia)				
+COE			|Coenagrionidae (Odonata)			
+GOM			|Gomphidae (Odonata)				
+CAM			|Cambaridae (Decapoda)				
+SIA			|Sialidae (Megaloptera)				
+CP			|Copepoda					
+HI			|Hirudinea					
+NE			|Nematoda	
+
 #### Non-numeric codes:
-|Name |		Definition|
+| Name |		Definition|
 | :---: | :---: |
 |NA		|Below detection limit|
 |ND		|Not determined|

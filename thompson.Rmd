@@ -16,7 +16,7 @@ par(pin=c(2.5,2.5),las=1)
 ```
 
 ```{r Load datasets, include=F}
-setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/GitHub/Thompson")
+setwd("/Users/raissamendonca/Documents/Kent State University/Costello Lab/GitHub/thompson")
 library(vegan)
 library(FSA)
 

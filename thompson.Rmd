@@ -2811,7 +2811,7 @@ plot(rda.water.sel)
 ```{r ALL SITES Surface Sediment RDA, fig.align='center',tidy=TRUE}
 rda.surf.base=rda(inv.hel~TotalNi.surf,allrefs)
 anova(rda.surf.base)
-
+  
 rda.surf=rda(inv.hel~AVS.surf+C.surf+PSEMFe.surf+PSEMMn.surf+PSEMNi.surf
                             +TotalFe.surf+TotalMn.surf+TotalNi.surf
                             +PAmNi.surf+PCrysNi.surf+PAmFe.surf+PCrysFe.surf
@@ -3004,6 +3004,36 @@ arrows(0,0,0.43,0.68,length=0.1, angle=15,lwd=2)
 text(0.58,0.7,expression(paste("Fe"[HFO]*"")),lwd=2)
 ```
 
+```{r Meta-analysis code, echo=F}
+##Code used to perform trial analyses to figure out a statistic/method to do meta-analysis using ordination data extracted from published figures (meetings with D. Costello, C. Blackwood & C. Cosgrove)
+
+medianNi <- c(rep(median(geochem$TotalNi.surf[1:4]),10),rep(median(geochem$TotalNi.surf[5:14]),10),
+              rep(median(geochem$TotalNi.surf[15:18]),10),rep(median(geochem$TotalNi.surf[19:28]),10))
+
+#1. PCA
+pca.surf <- summary(rda(inv.hel))
+  write.csv(data.frame(allrefs[,1:3], 
+                       pca.surf$sites,
+                       medianNi),"pca_scores.csv")
+  
+pca.s <- rda(inv.hel)
+  par(pin=c(3,3))
+  plot(pca.s,type="none",xlab="PCA1 (25.15%)",ylab="PCA2 (17.58%)")
+  points(pca.s,pch=c(15,16)[chem.inv.hel$Location],col=c(1,4)[chem.inv.hel$Effluent],cex=1.1,lwd=1) # Points instead of text for sites
+  text(pca.s,display="species",col="gray50",cex=0.6)
+  
+#2. RDA with median TOTNi
+rda.meta.ni=rda(inv.hel~medianNi)
+  anova(rda.meta.ni)
+  RsquareAdj(rda.meta.ni)
+  plot(rda.meta.ni)
+  
+#3. RDA with ref/exp & birch/thomp as categorical variables
+rda.meta.cat=rda(inv.hel~chem.inv.hel$Effluent) #Change between '$Effleunt' and '$Location'
+  anova(rda.meta.cat) # p=0.012 for Location (birch/thomp) and p=0.026 for Effluent (ref/exp)
+  RsquareAdj(rda.meta.cat) # R2=0.06 for Location (birch/thomp) & R2=0.05 for Effluent (ref/exp)
+  plot(rda.meta.cat)
+```
 
 ```{r include=F}
 # Linear models between all invert RAW ABUNDANCES and surf and deep chem variables: p-values stored in matrix

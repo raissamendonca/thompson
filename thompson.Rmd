@@ -2917,7 +2917,9 @@ legend(1.2,0.84,"Thompson Exposure",pch=6,pt.lwd=1,col="sienna1",text.col="sienn
 ## Forward selection with ordiR2step
 
 > EXPOSURE ONLY: water
-```{r fig.align='center'}
+
+```{r, fig.align='center'}
+
 rda.water.base.exp = rda(inv.hel.exp~1,allrefs[c(11:20,31:40),1:62])
 anova(benthos.exp.hel.rda.water.base)
 
@@ -2956,7 +2958,6 @@ arrows(0,0,0.065,-0.8,length=0.1, angle=15,lwd=2)
 text(0.07,-0.85,"pH",font=2)
 # arrows(0,0,0.7,0,length=0.1, angle=15,lwd=2)
 # text(0.7,-0.1,"Conductivity",cex=1,font=2)
-```
 ```
 
 > EXPOSURE ONLY: Surface Sediment
@@ -3023,14 +3024,14 @@ pca.surf <- rda(inv.hel)
   
 #2. RDA with median TOTNi
 rda.meta.ni=rda(inv.hel~medianNi)
-  anova(rda.meta.ni)
-  RsquareAdj(rda.meta.ni)
+  anova(rda.meta.ni) # p=0.057
+  RsquareAdj(rda.meta.ni) # R2=0.05
   plot(rda.meta.ni)
   
 #3. RDA with ref/exp & birch/thomp as categorical variables
-rda.meta.cat=rda(inv.hel~chem.inv.hel$Effluent) #Change between '$Effleunt' and '$Location'
-  anova(rda.meta.cat) # p=0.012 for Location (birch/thomp) and p=0.026 for Effluent (ref/exp)
-  RsquareAdj(rda.meta.cat) # R2=0.06 for Location (birch/thomp) & R2=0.05 for Effluent (ref/exp)
+rda.meta.cat=rda(inv.hel~chem.inv.hel$Effluent+chem.inv.hel$Location)
+  anova(rda.meta.cat) # p=0.002
+  RsquareAdj(rda.meta.cat) # R2=0.11
   plot(rda.meta.cat)
 ```
 

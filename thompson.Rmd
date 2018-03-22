@@ -289,8 +289,8 @@ text(x=4.5,y=0.38, labels=expression("Ni"[HFO]*""),srt=90,cex=0.75, col="red")
 
 ```
 
-# Sediment chemistry models and plots
 
+# Sediment chemistry models and plots
 ## AVS
 ```{r AVS stats, fig.align='center', tidy=TRUE}
 ### Depth (p < 0.001) and Effluent (p <- 0.017) significant
@@ -375,8 +375,8 @@ points(5,as.numeric(mean((WR$C[WR$Depth=="Deep"]))),
        pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
 ```
 
-## *NICKEL VARIABLES*
 
+## *NICKEL VARIABLES*
 ## TOTAL Ni MODEL
 
 ### Location (p=0.0158), Effluent (p < 0.001) and Sample.ID (p < 0.001) significant
@@ -727,8 +727,8 @@ sd(crys.molratio)
 
 ```
 
-## *IRON VARIABLES*
 
+## *IRON VARIABLES*
 ## TOTAL Fe MODEL
 
 ### Location:Effluent (p < 0.001) significant
@@ -1003,8 +1003,8 @@ points(5,as.numeric(mean((WR$CrysFe[WR$Depth=="Deep"]/WR$TotalFe[WR$Depth=="Deep
        pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
 ```
 
-## *MANGANESE VARIABLES*
 
+## *MANGANESE VARIABLES*
 ## TOTAL Mn MODEL
 
 ### Effluent (p <- 0.001) and Depth (p < 0.001)
@@ -1158,8 +1158,8 @@ points(5,as.numeric(mean((WR$DITMn[WR$Depth=="Deep"]/WR$TotalMn[WR$Depth=="Deep"
        pch=23,col="forestgreen",cex=1.5,lwd=2,bg="limegreen") # Weir Ref deep average
 ```
 
-# Water chemistry models and plots
 
+# Water chemistry models and plots
 ## CONDUCTIVITY
 
 ### AvgNi (p < 0.001) significant
@@ -1729,6 +1729,7 @@ barplot(invert_bar_b[,31:40],las=1,ylab="Relative abundance (%)",ylim=c(0,100),x
 legend(13,100,legend=relabund_b[,1],fill=colfunc(10),bty="n",cex=0.8)
 text(1,120,"Weir Exposure")
 ```
+
 
 # Invert analyses
 ```{r Diversity indices, include=F}
@@ -2408,7 +2409,7 @@ biomass$Ni.Fe <- allrefs$TotalNi.surf-allrefs$ASCNi.surf # Variable of Ni correc
 hex.exp <- biomass[c(11:20,31:40),]
 ```
 
-# Length and biomass: ANOVAs
+## Length and biomass: ANOVAs
 ```{r}
 EF_HEX <- aov(Mean.length~Effluent,data=biomass)
 summary(EF_HEX)
@@ -2420,7 +2421,7 @@ par(mfrow=c(1,1),pin=c(3,3))
 boxplot(Mean.length~Effluent,data=biomass,las=2,cex.axis=0.9)
 ```
 
-# [Ni] SURF corrected for Fe: *LENGTH* STATS
+## [Ni] SURF corrected for Fe: *LENGTH* STATS
 ```{r Ni.Fe Length stats}
 # ALL SITES (REF+EXP)
 NiCor_TOTLEN <- lm(Total.length~log(Ni.Fe),data=biomass)
@@ -2450,7 +2451,7 @@ summary(NiCor_MEDLEN)
 shapiro.test(resid(NiCor_MEDLEN))
 ```
 
-# [Ni] SURF corrected for Fe: *LENGTH* GRAPHS
+## [Ni] SURF corrected for Fe: *LENGTH* GRAPHS
 ```{r Ni.Fe Length graphs, fig.align='center', tidy=TRUE}
 
 # ALL SITES (REF+EXP)
@@ -2508,7 +2509,7 @@ logaxis(1,3,1)
 abline(lm(Median.length~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
 ```
 
-# [Ni] SURF corrected for Fe: *BIOMASS* STATS
+## [Ni] SURF corrected for Fe: *BIOMASS* STATS
 ```{r Ni.Fe Biomass stats}
 # ALL SITES (REF+EXP)
 
@@ -2539,7 +2540,7 @@ summary(NiCor_MEDBIO)
 shapiro.test(resid(NiCor_MEDBIO))
 ```
 
-# [Ni] SURF corrected for Fe: *BIOMASS* GRAPHS
+## [Ni] SURF corrected for Fe: *BIOMASS* GRAPHS
 ```{r Ni.Fe Biomass graphs, fig.align='center',tidy=TRUE}
 # ALL SITES (REF+EXP)
 par(pin=c(3,3))
@@ -2596,7 +2597,7 @@ logaxis(1,3,1)
 abline(lm(log10(Median.biomass)~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
 ```
 
-# TOTAL Ni: *LENGTH* STATS
+## TOTAL Ni: *LENGTH* STATS
 ```{r TOTNi Length stats, fig.align='center', tidy=TRUE}
 # ALL SITES (REF+EXP)
 TOTNi_TOTLEN <- lm(Total.length~log(TOTNi),data=biomass)
@@ -2645,7 +2646,7 @@ logaxis(1,3,1)
 abline(lm(Median.length~TOTNi,data=hex.exp),lty=3,lwd=3,col="red")
 ```
 
-# TOTAL Ni: *BIOMASS* STATS
+## TOTAL Ni: *BIOMASS* STATS
 ```{r TOTNi Biomass stats, fig.align='center', tidy=TRUE}
 # ALL SITES (REF+EXP)
 TOTNi_TOTBIO <- lm(log(Total.biomass+1)~log(TOTNi),data=biomass)
@@ -2674,7 +2675,7 @@ summary(TOTNi_MEDBIO)
 shapiro.test(resid(TOTNi_MEDBIO))
 ```
 
-# TOTAL Ni: *BIOMASS* GRAPHS
+##TOTAL Ni: *BIOMASS* GRAPHS
 ```{r TOTNi Biomass graphs, fig.align='center',tidy=TRUE}
 # ALL SITES (REF+EXP)
 par(pin=c(3,3))
@@ -2745,9 +2746,9 @@ abline(lm(log10(Median.biomass)~log10(TOTNi),data=hex.exp),lty=3,lwd=3,col="red"
 
 ------
 
+
 # REDUNDANCY ANALYSIS AND FORWARD SELECTION
 
-## ALL SITES: Hellinger distance transformation
 ```{r RDA datasets, include=F}
 library(vegan)
 
@@ -2778,12 +2779,13 @@ inv.hel.exp <- chem.inv.hel.exp[,66:103]
 
 benthos.exp$RDA.names <- c("Exp.B1","Exp.B2","Exp.B3","Exp.B4","Exp.B5","Exp.B6","Exp.B7","Exp.B8","Exp.B9","Exp.B10","Exp.W1","Exp.W2","Exp.W3","Exp.W4","Exp.W5","Exp.W6","Exp.W7","Exp.W8","Exp.W9","Exp.W10")
 ```
+## ALL SITES: Hellinger distance transformation
 
-## Forward selection with ordiR2step
+### Forward selection with ordiR2step
 
-> ALL SITES: water
+> ALL SITES: Water
 
-```{r ALL SITES water RDA, fig.align='center',tidy=TRUE}
+```{r ALL SITES Water RDA, fig.align='center',tidy=TRUE}
 rda.water.base=rda(inv.hel~1,allrefs)
 anova(rda.water.base)
 
@@ -2914,11 +2916,11 @@ legend(1.2,0.84,"Thompson Exposure",pch=6,pt.lwd=1,col="sienna1",text.col="sienn
 
 ## EXPOSURE ONLY: Hellinger distance transformation
 
-## Forward selection with ordiR2step
+### Forward selection with ordiR2step
 
-> EXPOSURE ONLY: water
+> EXPOSURE ONLY: Water
 
-```{r, fig.align='center'}
+```{r EXP Water RDA, fig.align='center'}
 
 rda.water.base.exp = rda(inv.hel.exp~1,allrefs[c(11:20,31:40),1:62])
 anova(benthos.exp.hel.rda.water.base)
@@ -2962,7 +2964,7 @@ text(0.07,-0.85,"pH",font=2)
 
 > EXPOSURE ONLY: Surface Sediment
 
-```{r, fig.align='center'}
+```{r EXP Surface Sediment RDA, fig.align='center'}
 library(vegan)
 benthos.exp.hel=benthos.chem.exp.hel[,63:100]
 benthos.exp.hel.rda.base=rda(benthos.exp.hel~TotalNi.surf,allrefs[c(11:20,31:40),1:62])
@@ -3005,6 +3007,8 @@ arrows(0,0,0.43,0.68,length=0.1, angle=15,lwd=2)
 text(0.58,0.7,expression(paste("Fe"[HFO]*"")),lwd=2)
 ```
 
+
+## Meta-analysis
 ```{r Meta-analysis code, echo=F}
 ##Code used to perform trial analyses to figure out a statistic/method to do meta-analysis using ordination data extracted from published figures (meetings with D. Costello, C. Blackwood & C. Cosgrove)
 
@@ -3029,7 +3033,7 @@ rda.meta.ni=rda(inv.hel~medianNi)
   plot(rda.meta.ni)
   
 #3. RDA with ref/exp & birch/thomp as categorical variables
-rda.meta.cat=rda(inv.hel~chem.inv.hel$Effluent+chem.inv.hel$Location)
+rda.meta.cat=rda(inv.hel~chem.inv.hel$Effluent+chem.inv.hel$Location) # {adonis} Effluent, p=0.004 // Location, p=0.011
   anova(rda.meta.cat) # p=0.002
   RsquareAdj(rda.meta.cat) # R2=0.11
   plot(rda.meta.cat)

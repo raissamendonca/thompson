@@ -1730,7 +1730,6 @@ legend(13,100,legend=relabund_b[,1],fill=colfunc(10),bty="n",cex=0.8)
 text(1,120,"Weir Exposure")
 ```
 
-
 # Invert analyses
 ```{r Diversity indices, include=F}
 library(vegan)
@@ -1781,9 +1780,9 @@ ps.exp=ifelse(BE.exp==T,16,
                     ifelse(WE.exp==T,1,13))
 ```
 
-# EPHEMERIDAE
+## EPHEMERIDAE
 
-## Reference + Exposure sites 
+### Reference + Exposure sites 
 ```{r All sites [Ni]_SURF, fig.align='center',tidy=TRUE}
 summary(lm(REL_EPH~log(TotalNi.surf), data=chem.inv))
 shapiro.test(resid((lm(REL_EPH~log(TotalNi.surf), data=chem.inv))))
@@ -1842,7 +1841,7 @@ legend(1300,46,"Weir Reference",pch=16,pt.lwd=3,col="dodgerblue4",text.col="dodg
 legend(1300,42,"Weir Exposure",pch=1,pt.lwd=3,col="dodgerblue4",text.col="dodgerblue4",bty="n")
 ```
 
-## Exposure sites *only*
+### Exposure sites *only*
 
 ```{r [Ni]_SURF, fig.align='center',tidy=TRUE}
 par(pin=c(1.5,3))
@@ -2116,7 +2115,7 @@ abline(lm(REL_EPH[1:10]~log10(SEMAVS.surf[1:10]),data=chem.inv.exp),lty=3,lwd=3,
 abline(lm(REL_EPH[11:20]~log10(SEMAVS.surf[11:20]),data=chem.inv.exp),lty=1,lwd=3,col="dodgerblue4")
 ```
 
-# TALITRIDAE
+## TALITRIDAE
 
 ```{r Tal Dissolved nickel, fig.align='center',tidy=TRUE}
 Tal.rel.abund=((benthos$TAL/rowSums(benthos[2:39]))*100)
@@ -2191,7 +2190,7 @@ logaxis(1,3,1)
 axis(1,at=c("25","50","200"),labels <- c("25","50","200"), las=1,tick=FALSE)
 ```
 
-# CHIRONOMIDAE
+## CHIRONOMIDAE
 
 ```{r Chi graphs, include=F}
 Chi.rel.abund=((benthos$CHI/rowSums(benthos[2:39]))*100)
@@ -2205,7 +2204,7 @@ par(pin=c(3,3))
 plot(Chi.rel.abund~allrefs$PAmFe.surf,pch=ps,lwd=3,las=1,cex=1.5,ylim=c(0,100),col=color.sample,xlab=expression(paste("Fe"[HFO]*" (%)")),ylab="Chironomidae abundance (%)")
 ```
 
-# CAENIDAE
+## CAENIDAE
 
 ```{r Cae regressions, fig.align='center',tidy=TRUE}
 Cae.rel.abund=((benthos$CAE/rowSums(benthos[2:39]))*100)
@@ -2329,7 +2328,7 @@ abline(lm(log10((Cae.rel.abund+1)[21:40])~log10(SEMAVSfOC.surf),data=allrefs[21:
 summary(lm(log(Cae.rel.abund.exp+1)~log(thomp.exp$SEMAVSfOC.surf)))
 ```
 
-# GAMMARIDAE
+## GAMMARIDAE
 
 ```{r Gam [Ni] SURF Exp only, fig.align='center',tidy=TRUE}
 Gam.rel.abund=((benthos$GAM/rowSums(benthos[2:39]))*100)
@@ -2380,10 +2379,7 @@ plot(Gam.rel.abund.exp~thomp.exp$SEMAVSfOC.surf,log="x",pch=ps.exp,lwd=3,las=1,c
      xlab=expression(paste("(Ni"[SEM]*"-AVS)/",italic(f),""[OC]*" (µmol/g)")),ylab="",xaxt="n")
 logaxis(1,3,1)
 ```
-
-------
-
-# EPHEMERIDAE BIOMASS
+## EPHEMERIDAE BIOMASS
 
 ```{r Biomass graphing codes}
 Sample.ID=as.vector(biomass$Sample.ID)
@@ -2409,7 +2405,7 @@ biomass$Ni.Fe <- allrefs$TotalNi.surf-allrefs$ASCNi.surf # Variable of Ni correc
 hex.exp <- biomass[c(11:20,31:40),]
 ```
 
-## Length and biomass: ANOVAs
+### Length and biomass: ANOVAs
 ```{r}
 EF_HEX <- aov(Mean.length~Effluent,data=biomass)
 summary(EF_HEX)
@@ -2421,7 +2417,7 @@ par(mfrow=c(1,1),pin=c(3,3))
 boxplot(Mean.length~Effluent,data=biomass,las=2,cex.axis=0.9)
 ```
 
-## [Ni] SURF corrected for Fe: *LENGTH* STATS
+### [Ni] SURF corrected for Fe: *LENGTH* STATS
 ```{r Ni.Fe Length stats}
 # ALL SITES (REF+EXP)
 NiCor_TOTLEN <- lm(Total.length~log(Ni.Fe),data=biomass)
@@ -2451,7 +2447,7 @@ summary(NiCor_MEDLEN)
 shapiro.test(resid(NiCor_MEDLEN))
 ```
 
-## [Ni] SURF corrected for Fe: *LENGTH* GRAPHS
+### [Ni] SURF corrected for Fe: *LENGTH* GRAPHS
 ```{r Ni.Fe Length graphs, fig.align='center', tidy=TRUE}
 
 # ALL SITES (REF+EXP)
@@ -2509,7 +2505,7 @@ logaxis(1,3,1)
 abline(lm(Median.length~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
 ```
 
-## [Ni] SURF corrected for Fe: *BIOMASS* STATS
+### [Ni] SURF corrected for Fe: *BIOMASS* STATS
 ```{r Ni.Fe Biomass stats}
 # ALL SITES (REF+EXP)
 
@@ -2540,7 +2536,7 @@ summary(NiCor_MEDBIO)
 shapiro.test(resid(NiCor_MEDBIO))
 ```
 
-## [Ni] SURF corrected for Fe: *BIOMASS* GRAPHS
+### [Ni] SURF corrected for Fe: *BIOMASS* GRAPHS
 ```{r Ni.Fe Biomass graphs, fig.align='center',tidy=TRUE}
 # ALL SITES (REF+EXP)
 par(pin=c(3,3))
@@ -2597,7 +2593,7 @@ logaxis(1,3,1)
 abline(lm(log10(Median.biomass)~log10(Ni.Fe),data=hex.exp),lty=3,lwd=3,col="red")
 ```
 
-## TOTAL Ni: *LENGTH* STATS
+### TOTAL Ni: *LENGTH* STATS
 ```{r TOTNi Length stats, fig.align='center', tidy=TRUE}
 # ALL SITES (REF+EXP)
 TOTNi_TOTLEN <- lm(Total.length~log(TOTNi),data=biomass)
@@ -2626,7 +2622,7 @@ summary(TOTNi_MEDLEN)
 shapiro.test(resid(TOTNi_MEDLEN))
 ```
 
-## TOTAL Ni: *LENGTH* GRAPHS
+### TOTAL Ni: *LENGTH* GRAPHS
 ```{r TOTNi Length graphs, fig.align='center',tidy=TRUE}
 # ALL SITES (REF+EXP)
 
@@ -2646,7 +2642,7 @@ logaxis(1,3,1)
 abline(lm(Median.length~TOTNi,data=hex.exp),lty=3,lwd=3,col="red")
 ```
 
-## TOTAL Ni: *BIOMASS* STATS
+### TOTAL Ni: *BIOMASS* STATS
 ```{r TOTNi Biomass stats, fig.align='center', tidy=TRUE}
 # ALL SITES (REF+EXP)
 TOTNi_TOTBIO <- lm(log(Total.biomass+1)~log(TOTNi),data=biomass)
@@ -2675,7 +2671,7 @@ summary(TOTNi_MEDBIO)
 shapiro.test(resid(TOTNi_MEDBIO))
 ```
 
-##TOTAL Ni: *BIOMASS* GRAPHS
+### TOTAL Ni: *BIOMASS* GRAPHS
 ```{r TOTNi Biomass graphs, fig.align='center',tidy=TRUE}
 # ALL SITES (REF+EXP)
 par(pin=c(3,3))
@@ -2745,6 +2741,7 @@ abline(lm(log10(Median.biomass)~log10(TOTNi),data=hex.exp),lty=3,lwd=3,col="red"
 ```
 
 ------
+
 
 
 # REDUNDANCY ANALYSIS AND FORWARD SELECTION
@@ -2850,10 +2847,8 @@ ref.t=grepl("Ref\\.T.*",sites.T)
 exp.b=grepl("Exp\\.B.*",sites.T)
 exp.t=grepl("Exp\\.T.*",sites.T)
 
-colRDA=ifelse(ref.b==T,"springgreen3",
-                    ifelse(ref.t==T,"springgreen3",
-                           ifelse(exp.b==T,"sienna1",
-                                  ifelse(exp.t==T,"sienna1",1))))
+colRDA=c("sienna1","springgreen3")[allrefs$Effluent] #Set colors based on Reference and Exposure
+
 ptRDA=ifelse(ref.b==T,1,
           ifelse(ref.t==T,2,
                  ifelse(exp.b==T,5,
@@ -3008,7 +3003,8 @@ text(0.58,0.7,expression(paste("Fe"[HFO]*"")),lwd=2)
 ```
 
 
-## Meta-analysis
+
+# Meta-analysis
 ```{r Meta-analysis code, echo=F}
 ##Code used to perform trial analyses to figure out a statistic/method to do meta-analysis using ordination data extracted from published figures (meetings with D. Costello, C. Blackwood & C. Cosgrove)
 
@@ -3147,17 +3143,17 @@ sum(absiglm)
 # Invert vs. chemistry models
 ## "adonis" {vegan} function gives variable significance but not overall model significance (latter given by "rda")
 
-# Sed Surf
+## Sed Surf
 adonis(benthos.chem.rda.allrefs.hel[,56:93]~TotalNi.surf+TotalFe.surf+TotalMn.surf+
          AVS.surf+PSEMFe.surf+PSEMMn.surf+PSEMNi.surf+PAmFe.surf+PAmNi.surf+PCrysFe.surf+
          PCrysNi.surf+POxidMn.surf+Nit.surf+Car.surf,data=benthos.chem.rda.allrefs.hel)
 
-# Sed Deep
+## Sed Deep
 adonis(benthos.chem.rda.allrefs.hel[,56:93]~TotalNi.deep+TotalFe.deep+TotalMn.deep+
          AVS.deep+PSEMFe.deep+PSEMMn.deep+PSEMNi.deep+PAmFe.deep+PAmNi.deep+PCrysFe.deep+
          PCrysNi.deep+POxidMn.deep+Nit.deep+Car.deep,data=benthos.chem.rda.allrefs.hel)
 
-# water
+## Water
 adonis(benthos.chem.rda.allrefs.hel[,56:93]~SO4+Ni+Cond+pH+Chl+Ni,data=benthos.chem.rda.allrefs.hel)
 
 write.table(inv_simp,pipe("pbcopy"),sep="\t",row.names=F)
